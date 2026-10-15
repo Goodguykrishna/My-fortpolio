@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slime Mould</title>
+<style>
+  :root{
+    --bg:#05070a; --ink:#e6e9ec; --dim:#66707a; --line:#161b22;
+    --glow:#7fd4c8; --warm:#e8a24a;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .stage{min-height:100svh;display:grid;place-items:center;padding:64px 24px}
+  .rig{width:100%;max-width:1440px;display:grid;
+    grid-template-columns:260px minmax(0,1fr) 260px;gap:80px;align-items:center}
+
+  .kicker{font-family:var(--mono);font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);margin:0 0 20px}
+  .title{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.02;
+    letter-spacing:-.02em;margin:0 0 20px}
+  .title em{font-style:italic;color:var(--glow)}
+  .lede{font-size:14px;line-height:1.65;color:#8e959c;margin:0}
+
+  .meta{font-family:var(--mono);font-size:10.5px;line-height:2.1;color:var(--dim);letter-spacing:.04em}
+  .meta b{display:block;color:#828b93;font-weight:400;letter-spacing:.18em;
+    text-transform:uppercase;font-size:9px;margin-bottom:10px}
+  .meta .k{color:#aeb6bd}
+  .rule{height:1px;background:var(--line);margin:22px 0}
+  .btn{appearance:none;background:none;border:0;padding:0;cursor:pointer;display:block;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);transition:color .3s;margin-bottom:10px}
+  .btn:hover{color:var(--glow)}
+
+  .frame{position:relative;margin:0;width:100%;aspect-ratio:4/3;
+    background:#04060a;overflow:hidden;
+    box-shadow:0 0 0 1px #12171e, 0 60px 120px -50px #000}
+  .frame canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  .frame canvas.dragging{cursor:grabbing}
+  .edge{position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 100px 34px rgba(0,0,0,.6)}
+  .hud{position:absolute;left:18px;right:18px;bottom:15px;display:flex;
+    justify-content:space-between;gap:16px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.2em;text-transform:uppercase;color:#5a636b;pointer-events:none;transition:color .5s}
+  .frame:hover .hud{color:#8b949c}
+  .hud em{font-style:normal;color:var(--glow)}
+  .hud i{font-style:normal;color:var(--warm)}
+
+  @media (max-width:1100px){
+    .rig{grid-template-columns:1fr;gap:36px;max-width:620px}
+    .frame{aspect-ratio:1/1;order:-1}
+    .title{font-size:34px}
+  }
+</style>
+<script>if(location.search.includes('bare'))document.documentElement.classList.add('bare')</script>
+<style>
+  html.bare .left,html.bare .right,html.bare .hud,html.bare .edge,html.bare .glass{display:none!important}
+  html.bare .stage{padding:0;min-height:100vh}
+  html.bare .rig{display:block;max-width:none;width:100vw;height:100vh}
+  html.bare .frame{width:100vw;height:100vh;aspect-ratio:auto!important;border:0;border-radius:0;box-shadow:none}
+</style>
+</head>
+<body>
+<section class="stage">
+  <div class="rig">
+
+    <div class="left">
+      <p class="kicker">Ⅲ · Physarum polycephalum · contained</p>
+      <h1 class="title">It has no<br><em>brain</em>.</h1>
+      <p class="lede">One cell, no neurons. Put food in a maze and it finds the shortest path through. In 2010 researchers laid food out like the cities around Tokyo and it grew a network that matched the rail system. It solves by being alive.</p>
+    </div>
+
+    <figure class="frame">
+      <canvas id="c"></canvas>
+      <div class="edge"></div>
+      <div class="hud">
+        <span id="hint">click to drop food · drag to turn</span>
+        <span id="stat"></span>
+      </div>
+    </figure>
+
+    <div class="right">
+      <div class="meta">
+        <b>Interact</b>
+        <span class="k">Click</span> &nbsp;drop a food source<br>
+        <span class="k">Drag</span> &nbsp;turn the colony<br>
+        <span class="k">Wait</span> &nbsp;it prunes what it<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stopped using<br>
+      </div>
+      <div class="rule"></div>
+      <div class="meta">
+        <b>Method</b>
+        262,144 agents on the GPU.<br>
+        Each one obeys two rules:<br>
+        follow the trail, leave a<br>
+        trail. Nothing else.<br><br>
+        No mesh. No keyframes.<br>
+        Nobody modelled this — it<br>
+        is grown, live, every time.<br><br>
+        The growth is biased onto<br>
+        icosahedral axes, so it runs<br>
+        like circuitry. The housing<br>
+        is a 20-facet solid the view<br>
+        ray actually refracts through.
+      </div>
+      <div class="rule"></div>
+      <button class="btn" id="seed">↺ &nbsp;New colony</button>
+      <button class="btn" id="clear">✕ &nbsp;Clear food</button>
+    </div>
+
+  </div>
+</section>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+
+/* ══════════════════════════════════════════════════════════════════════
+   PHYSARUM — a slime mould grown in a 96³ volume on the GPU.
+
+   Every frame: 262,144 agents sense the trail ahead of them, steer toward
+   the strongest scent, step forward and deposit. The trail diffuses and
+   decays. Routes that get used get reinforced; routes that don't, vanish.
+   That is the whole algorithm. The network is emergent — there is no mesh
+   and no animation anywhere in this file.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const canvas  = document.getElementById('c');
+const hintEl  = document.getElementById('hint');
+const statEl  = document.getElementById('stat');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const AW = 512, AH = 512;             // 262,144 agents
+const N  = 96, TX = 12, TY = 8;       // volume 96³, flattened into 12×8 tiles
+const VW = N*TX, VH = N*TY;
+const MAXFOOD = 14;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, alpha:false,
+  powerPreference:'high-performance' });
+renderer.outputColorSpace    = THREE.SRGBColorSpace;
+renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
+renderer.autoClearColor = true;
+
+if(!renderer.capabilities.isWebGL2){
+  hintEl.textContent = 'needs WebGL2';
+}
+const ext = renderer.extensions;
+ext.get('EXT_color_buffer_float');
+
+/* ── render targets ───────────────────────────────────────────────── */
+function rt(w,h){
+  const t = new THREE.WebGLRenderTarget(w,h,{
+    type: THREE.FloatType, format: THREE.RGBAFormat,
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+    wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping,
+    depthBuffer:false, stencilBuffer:false, generateMipmaps:false });
+  return t;
+}
+let posA = rt(AW,AH), posB = rt(AW,AH);
+let dirA = rt(AW,AH), dirB = rt(AW,AH);
+let volA = rt(VW,VH), volB = rt(VW,VH);
+
+const quadCam   = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const quadGeo   = new THREE.PlaneGeometry(2,2);
+const quadScene = new THREE.Scene();
+const quadMesh  = new THREE.Mesh(quadGeo, new THREE.MeshBasicMaterial());
+quadScene.add(quadMesh);
+function pass(mat, target){
+  quadMesh.material = mat;
+  renderer.setRenderTarget(target);
+  renderer.render(quadScene, quadCam);
+  renderer.setRenderTarget(null);
+}
+
+/* ── shared GLSL: the flattened-volume addressing ─────────────────── */
+const VOL = `
+  #define N  ${N}.0
+  #define TX ${TX}.0
+  #define TY ${TY}.0
+  vec2 volUV(vec3 p, float z){
+    z = clamp(z, 0.0, N-1.0);
+    float tx = mod(z, TX), ty = floor(z/TX);
+    vec2 inTile = clamp(p.xy, vec2(0.5/N), vec2(1.0-0.5/N));
+    return (vec2(tx,ty) + inTile) / vec2(TX,TY);
+  }
+  float volAt(sampler2D T, vec3 p){
+    if(any(lessThan(p, vec3(0.0))) || any(greaterThan(p, vec3(1.0)))) return 0.0;
+    float z = p.z*(N-1.0), z0 = floor(z), f = z-z0;
+    float a = texture2D(T, volUV(p, z0)).r;
+    float b = texture2D(T, volUV(p, z0+1.0)).r;
+    return mix(a,b,f);
+  }
+  float h11(float n){ return fract(sin(n)*43758.5453123); }
+  float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453123); }
+  vec3  h33(vec3 p){
+    p = vec3(dot(p,vec3(127.1,311.7,74.7)), dot(p,vec3(269.5,183.3,246.1)), dot(p,vec3(113.5,271.9,124.6)));
+    return fract(sin(p)*43758.5453123)*2.0-1.0;
+  }
+`;
+const VS = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`;
+
+/* ── 1. seed the colony ───────────────────────────────────────────── */
+const seedPos = new THREE.ShaderMaterial({ uniforms:{ uSeed:{value:0} }, vertexShader:VS,
+  fragmentShader: VOL + `
+  varying vec2 vUv; uniform float uSeed;
+  void main(){
+    vec3 r = h33(vec3(vUv*137.0, uSeed));
+    vec3 d = normalize(r + 1e-4);
+    float rad = 0.05 + 0.26*h21(vUv*71.0+uSeed);
+    gl_FragColor = vec4(vec3(0.5) + d*rad, 0.0);
+  }`});
+const seedDir = new THREE.ShaderMaterial({ uniforms:{ uSeed:{value:0} }, vertexShader:VS,
+  fragmentShader: VOL + `
+  varying vec2 vUv; uniform float uSeed;
+  void main(){
+    vec3 d = normalize(h33(vec3(vUv*311.0, uSeed+7.0)) + 1e-4);
+    gl_FragColor = vec4(d, 0.0);
+  }`});
+const clearVol = new THREE.ShaderMaterial({ vertexShader:VS,
+  fragmentShader:`void main(){ gl_FragColor = vec4(0.0); }` });
+
+/* ── 2. agent step: sense, steer, move, age ───────────────────────── */
+const agentPos = new THREE.ShaderMaterial({
+  uniforms:{ tPos:{value:null}, tDir:{value:null}, tVol:{value:null},
+             uDt:{value:0.016}, uSpeed:{value:0.0078} },
+  vertexShader:VS, fragmentShader: VOL + `
+  varying vec2 vUv;
+  uniform sampler2D tPos, tDir; uniform float uDt, uSpeed;
+  void main(){
+    vec4 P = texture2D(tPos, vUv);
+    vec3 d = normalize(texture2D(tDir, vUv).xyz + 1e-6);
+    vec3 p = P.xyz + d*uSpeed;
+    // the colony lives inside a sphere; outside it, walk back in
+    vec3 c = p - 0.5;
+    float r = length(c);
+    if(r > 0.360) p = 0.5 + normalize(c)*(0.72 - r);   // fold back inward
+    gl_FragColor = vec4(p, P.w + uDt);
+  }`});
+
+const agentDir = new THREE.ShaderMaterial({
+  uniforms:{ tPos:{value:null}, tDir:{value:null}, tVol:{value:null},
+             uSense:{value:0.038}, uCone:{value:0.60}, uTurn:{value:0.13},
+             uSeed:{value:0}, uFood:{value:new Array(MAXFOOD*4).fill(0)},
+             uNFood:{value:0}, uPull:{value:0.038}, uLat:{value:0.10} },
+  vertexShader:VS, fragmentShader: VOL + `
+  varying vec2 vUv;
+  uniform sampler2D tPos, tDir, tVol;
+  uniform float uSense, uCone, uTurn, uSeed, uPull, uLat;
+  uniform int   uNFood;
+  uniform vec4  uFood[${MAXFOOD}];
+  void main(){
+    vec3 p = texture2D(tPos, vUv).xyz;
+    vec3 d = normalize(texture2D(tDir, vUv).xyz + 1e-6);
+
+    // an orthonormal frame around the heading
+    vec3 up = abs(d.y) < 0.9 ? vec3(0.0,1.0,0.0) : vec3(1.0,0.0,0.0);
+    vec3 u  = normalize(cross(d, up));
+    vec3 v  = cross(d, u);
+
+    // sense a cone ahead: straight, and four off-axis
+    float best = volAt(tVol, p + d*uSense) * 1.02;   // slight bias to going straight
+    vec3  bd   = d;
+    for(int i=0;i<4;i++){
+      float a = float(i)*1.5707963 + h21(vUv*53.0 + uSeed)*1.5707963;
+      vec3  o = normalize(d + (u*cos(a) + v*sin(a))*uCone);
+      float s = volAt(tVol, p + o*uSense);
+      if(s > best){ best = s; bd = o; }
+    }
+
+    // food pulls directly — that is the only thing here with a goal
+    vec3 pull = vec3(0.0);
+    for(int i=0;i<${MAXFOOD};i++){
+      if(i >= uNFood) break;
+      vec3 f = uFood[i].xyz - p;
+      float L = length(f) + 1e-4;
+      pull += (f/L) * uFood[i].w / (0.06 + L*L*7.0);
+    }
+    bd = normalize(bd + pull*uPull + 1e-6);
+
+    // wander, so it keeps exploring instead of committing too early
+    vec3 jit = h33(vec3(vUv*911.0, uSeed));
+    bd = normalize(bd + jit*0.115);
+
+    vec3 nd = normalize(mix(d, bd, uTurn) + 1e-6);
+
+    // pull slightly onto the nearest icosahedral axis. the growth stays organic
+    // but its runs and branch angles become crystalline instead of wormlike.
+    const float PH = 1.6180339887, IP = 0.6180339887;
+    vec3 best3 = nd; float bdot = -2.0;
+    for(int i=0;i<6;i++){
+      vec3 ax;
+      if(i==0) ax = vec3(0.0, IP, PH);
+      else if(i==1) ax = vec3(0.0,-IP, PH);
+      else if(i==2) ax = vec3( IP, PH, 0.0);
+      else if(i==3) ax = vec3(-IP, PH, 0.0);
+      else if(i==4) ax = vec3( PH, 0.0, IP);
+      else          ax = vec3( PH, 0.0,-IP);
+      ax = normalize(ax);
+      float k = dot(nd, ax);
+      if(abs(k) > bdot){ bdot = abs(k); best3 = ax*sign(k); }
+    }
+    nd = normalize(mix(nd, best3, uLat*smoothstep(0.80, 0.995, bdot)) + 1e-6);
+    gl_FragColor = vec4(nd, 0.0);
+  }`});
+
+/* ── 3. deposit: every agent lays trail into the volume ───────────── */
+const depGeo = new THREE.BufferGeometry();
+{
+  const a = new Float32Array(AW*AH*3);
+  let i=0;
+  for(let y=0;y<AH;y++) for(let x=0;x<AW;x++){ a[i++]=(x+0.5)/AW; a[i++]=(y+0.5)/AH; a[i++]=0; }
+  depGeo.setAttribute('position', new THREE.BufferAttribute(a,3));
+}
+const depMat = new THREE.ShaderMaterial({
+  transparent:true, depthTest:false, depthWrite:false, blending:THREE.AdditiveBlending,
+  uniforms:{ tPos:{value:null}, uAmt:{value:0.0075} },
+  vertexShader: VOL + `
+    uniform sampler2D tPos; varying float vA;
+    void main(){
+      vec3 p = texture2D(tPos, position.xy).xyz;
+      float z = clamp(p.z*(N-1.0), 0.0, N-1.0);
+      vec2 uv = volUV(p, floor(z + 0.5));
+      vA = 1.0;
+      gl_Position = vec4(uv*2.0-1.0, 0.0, 1.0);
+      gl_PointSize = 1.0;
+    }`,
+  fragmentShader:`
+    uniform float uAmt; varying float vA;
+    void main(){ gl_FragColor = vec4(uAmt*vA, 0.0, 0.0, 1.0); }`
+});
+const depPoints = new THREE.Points(depGeo, depMat);
+depPoints.frustumCulled = false;
+const depScene = new THREE.Scene();
+depScene.add(depPoints);
+
+/* ── 4. diffuse + decay + food emission ───────────────────────────── */
+const diffuse = new THREE.ShaderMaterial({
+  uniforms:{ tVol:{value:null}, uDecay:{value:0.940}, uBlur:{value:0.24},
+             uFood:{value:new Array(MAXFOOD*4).fill(0)}, uNFood:{value:0} },
+  vertexShader:VS, fragmentShader: VOL + `
+  varying vec2 vUv;
+  uniform sampler2D tVol; uniform float uDecay, uBlur;
+  uniform int uNFood; uniform vec4 uFood[${MAXFOOD}];
+  void main(){
+    // recover this texel's voxel coordinate from the flattened layout
+    vec2 tile = floor(vUv * vec2(TX,TY));
+    vec2 inTile = vUv*vec2(TX,TY) - tile;
+    float z = tile.y*TX + tile.x;
+    vec3 p = vec3(inTile, (z+0.5)/N);
+
+    float e = 1.0/N;
+    float c = volAt(tVol, p);
+    float s = volAt(tVol,p+vec3(e,0,0)) + volAt(tVol,p-vec3(e,0,0))
+            + volAt(tVol,p+vec3(0,e,0)) + volAt(tVol,p-vec3(0,e,0))
+            + volAt(tVol,p+vec3(0,0,e)) + volAt(tVol,p-vec3(0,0,e));
+    float v = mix(c, s/6.0, uBlur) * uDecay;
+
+    for(int i=0;i<${MAXFOOD};i++){
+      if(i >= uNFood) break;
+      float L = length(uFood[i].xyz - p);
+      v += uFood[i].w * 0.26 * exp(-L*L*820.0);
+    }
+    gl_FragColor = vec4(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0);
+  }`});
+
+/* ── 5. render: refract through a faceted shell, then march the core ── */
+const view = new THREE.ShaderMaterial({
+  uniforms:{ tVol:{value:null}, uCam:{value:new THREE.Vector3()},
+             uInv:{value:new THREE.Matrix4()}, uAspect:{value:4/3},
+             uFov:{value:0.5}, uSteps:{value:80}, uSeed:{value:0}, uT:{value:0},
+             uFood:{value:new Array(MAXFOOD*4).fill(0)}, uNFood:{value:0} },
+  vertexShader:VS, fragmentShader: VOL + `
+  varying vec2 vUv;
+  uniform sampler2D tVol; uniform vec3 uCam; uniform mat4 uInv;
+  uniform float uAspect, uFov, uSeed, uT; uniform int uSteps;
+  uniform int uNFood; uniform vec4 uFood[${MAXFOOD}];
+
+  #define SR 0.470                       // shell radius (plane offset)
+  #define PH 1.6180339887
+  #define IP 0.6180339887
+
+  vec3 faceN(int i){
+    if(i < 8){
+      return normalize(vec3(
+        (mod(float(i),2.0)<0.5)?1.0:-1.0,
+        (mod(floor(float(i)/2.0),2.0)<0.5)?1.0:-1.0,
+        (mod(floor(float(i)/4.0),2.0)<0.5)?1.0:-1.0));
+    }
+    int j = i-8;
+    float g = floor(float(j)/4.0), sgn = mod(float(j),4.0);
+    float a = (mod(sgn,2.0)<0.5)? IP : -IP;
+    float b = (sgn<2.0)? PH : -PH;
+    vec3 n = (g<0.5) ? vec3(0.0,a,b) : (g<1.5) ? vec3(a,b,0.0) : vec3(b,0.0,a);
+    return normalize(n);
+  }
+
+  // slab method over the 20 half-spaces of the containment
+  bool shell(vec3 ro, vec3 rd, out float t0, out float t1, out vec3 n0, out vec3 n1){
+    t0=-1e9; t1=1e9; n0=vec3(0,1,0); n1=vec3(0,1,0);
+    vec3 o = ro - 0.5;
+    for(int i=0;i<20;i++){
+      vec3 n = faceN(i);
+      float den = dot(rd,n), num = SR - dot(o,n);
+      if(abs(den) < 1e-7){ if(num < 0.0){ return false; } continue; }
+      float t = num/den;
+      if(den < 0.0){ if(t > t0){ t0=t; n0=n; } }
+      else          { if(t < t1){ t1=t; n1=n; } }
+    }
+    return t0 < t1 && t1 > 0.0;
+  }
+
+  // how close a surface point sits to a facet edge — this is the cage
+  float edgeAt(vec3 p){
+    vec3 o = p - 0.5;
+    float m1 = 1e9, m2 = 1e9;
+    for(int i=0;i<20;i++){
+      float e = abs(SR - dot(o, faceN(i)));
+      if(e < m1){ m2 = m1; m1 = e; } else if(e < m2){ m2 = e; }
+    }
+    return 1.0 - smoothstep(0.0, 0.035, m2);
+  }
+
+  float envL(vec3 d){
+    float e = 0.05 + 0.22*smoothstep(-0.4, 1.0, d.y);
+    e += 2.4*pow(max(dot(normalize(d), normalize(vec3(-0.45,0.8,0.42))), 0.0), 26.0);
+    e += 1.1*pow(max(dot(normalize(d), normalize(vec3(0.75,0.15,-0.6))), 0.0), 20.0);
+    return e;
+  }
+
+  vec3 marchCore(vec3 ro, vec3 rd, float tEnd, float jit){
+    float steps = float(uSteps);
+    float dt = tEnd/steps;
+    float t = dt*jit;
+    float trans = 1.0;
+    vec3 col = vec3(0.0);
+    for(int i=0;i<160;i++){
+      if(i >= uSteps || trans < 0.012) break;
+      vec3 p = ro + rd*t;
+      if(length(p-0.5) < 0.375){
+        float d = volAt(tVol, p);
+        if(d > 0.002){
+          float dens = pow(d, 2.7)*2.4;
+          // deep blue at the edges of growth, cyan through the body,
+          // white-hot only where the colony has committed
+          vec3 c = mix(vec3(0.035,0.10,0.38), vec3(0.10,0.48,0.92), smoothstep(0.10,0.42,d));
+          c = mix(c, vec3(0.55,0.88,1.00), smoothstep(0.52,0.84,d));
+          c = mix(c, vec3(1.00,0.93,0.78), smoothstep(0.90,1.00,d));
+          float a = 1.0 - exp(-dens*dt*34.0);
+          col += c * a * trans * 0.52;
+          trans *= 1.0 - a;
+        }
+      }
+      t += dt;
+    }
+    // the nucleus
+    float tc = dot(vec3(0.5)-ro, rd);
+    if(tc > 0.0){
+      float dd = length(ro + rd*tc - 0.5);
+      float pulse = 0.85 + 0.15*sin(uT*1.1);
+      col += vec3(0.78,0.90,1.0) * pulse * 0.016/(dd*dd*90.0 + 0.004);
+    }
+    for(int i=0;i<${MAXFOOD};i++){
+      if(i >= uNFood) break;
+      float tf = dot(uFood[i].xyz-ro, rd);
+      if(tf < 0.0) continue;
+      float dd = length(ro + rd*tf - uFood[i].xyz);
+      col += vec3(1.0,0.80,0.44) * uFood[i].w * 0.052/(dd*dd*300.0 + 0.006);
+    }
+    return col;
+  }
+
+  void main(){
+    vec2 ndc = vUv*2.0-1.0;
+    vec3 rd = normalize((uInv * vec4(ndc.x*uAspect*uFov, ndc.y*uFov, -1.0, 0.0)).xyz);
+    vec3 ro = uCam;
+    float jit = h21(vUv*vec2(1920.0,1080.0) + uSeed);
+
+    // the void it sits in
+    vec3 col = mix(vec3(0.010,0.013,0.026), vec3(0.020,0.026,0.048),
+                   1.0 - length(vUv-0.5)*1.25);
+
+    float t0,t1; vec3 n0,n1;
+    if(shell(ro, rd, t0, t1, n0, n1) && t1 > 0.0){
+      t0 = max(t0, 0.0);
+      vec3 pE = ro + rd*t0;
+
+      float ci = clamp(dot(-rd, n0), 0.0, 1.0);
+      float F  = 0.035 + 0.965*pow(1.0-ci, 5.0);
+
+      // the glass itself
+      col += vec3(0.58,0.72,1.0) * F * envL(reflect(rd, n0)) * 0.52;
+
+      // the cage: facet edges catch light
+      float e = edgeAt(pE);
+      col += vec3(0.46,0.74,1.00) * e * (0.055 + 0.40*F);
+
+      // refract in, cross the interior, pick up the colony on the way
+      vec3 rdi = refract(rd, n0, 1.0/1.46);
+      if(dot(rdi,rdi) > 0.0){
+        float a0,a1; vec3 m0,m1;
+        vec3 pin = pE + rdi*1e-4;
+        float span = 1.0;
+        if(shell(pin, rdi, a0, a1, m0, m1)) span = max(a1, 0.02);
+        col += marchCore(pin, rdi, span, jit) * (1.0 - F) * 0.95;
+        // far wall, seen from inside
+        col += vec3(0.30,0.46,0.72) * edgeAt(pin + rdi*span) * 0.05 * (1.0-F);
+      }
+    } else {
+      // corona, so the object sits in light rather than on black
+      float d = length((ro + rd*max(dot(vec3(0.5)-ro, rd),0.0)) - 0.5);
+      col += vec3(0.10,0.26,0.52) * 0.030/(pow(max(d-0.44,0.0),1.5)*160.0 + 0.09);
+    }
+    gl_FragColor = vec4(col, 1.0);
+  }`});
+
+/* ── camera / orbit ───────────────────────────────────────────────── */
+let az=0.6, el=0.32, azV=0, elV=0, drift=0;
+const DIST = 1.62;
+const camPos = new THREE.Vector3();
+const camMat = new THREE.Matrix4();
+const CENTER = new THREE.Vector3(0.5,0.5,0.5);
+const UPV = new THREE.Vector3(0,1,0);
+function placeCamera(){
+  const a=az+drift, ce=Math.cos(el), se=Math.sin(el);
+  camPos.set(0.5+Math.sin(a)*DIST*ce, 0.5+se*DIST, 0.5+Math.cos(a)*DIST*ce);
+  camMat.lookAt(camPos, CENTER, UPV);
+  view.uniforms.uCam.value.copy(camPos);
+  view.uniforms.uInv.value.makeRotationFromQuaternion(
+    new THREE.Quaternion().setFromRotationMatrix(camMat));
+}
+
+/* ── food ─────────────────────────────────────────────────────────── */
+const food = [];
+const foodBuf = Array.from({length:MAXFOOD},()=>new THREE.Vector4(0,0,0,0));
+function syncFood(){
+  for(let i=0;i<MAXFOOD;i++){
+    const f = food[i];
+    foodBuf[i].set(f?f.x:0, f?f.y:0, f?f.z:0, f?f.w:0);
+  }
+  for(const m of [agentDir, diffuse, view]){
+    m.uniforms.uFood.value = foodBuf;
+    m.uniforms.uNFood.value = food.length;
+  }
+}
+function addFood(ndcX, ndcY){
+  if(food.length >= MAXFOOD) food.shift();
+  // shoot a ray from the cursor and drop the node where it passes nearest the centre
+  const rd = new THREE.Vector3(ndcX*(4/3)*0.5, ndcY*0.5, -1).applyMatrix4(view.uniforms.uInv.value).normalize();
+  const toC = CENTER.clone().sub(camPos);
+  const t = toC.dot(rd);
+  const p = camPos.clone().addScaledVector(rd, t);
+  // keep it inside the living sphere
+  const c = p.clone().sub(CENTER);
+  if(c.length() > 0.32) p.copy(CENTER).add(c.normalize().multiplyScalar(0.32));
+  food.push(new THREE.Vector4(p.x, p.y, p.z, 1.0));
+  syncFood();
+  hintEl.textContent = food.length === 1 ? 'it is heading for it · add more'
+                                         : 'it will find the route between them';
+}
+
+/* ── post ─────────────────────────────────────────────────────────── */
+const _sz=new THREE.Vector2(); renderer.getDrawingBufferSize(_sz);
+const _rt=new THREE.WebGLRenderTarget(Math.max(_sz.x,2),Math.max(_sz.y,2),
+  { type:THREE.HalfFloatType, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter });
+const composer = new EffectComposer(renderer,_rt);
+const viewScene = new THREE.Scene();
+const viewMesh  = new THREE.Mesh(quadGeo, view);
+viewScene.add(viewMesh);
+composer.addPass(new RenderPass(viewScene, quadCam));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 0.68, 0.62, 0.42);
+composer.addPass(bloom);
+const finalPass = new ShaderPass({
+  uniforms:{ tDiffuse:{value:null}, uT:{value:0} },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform float uT; varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      vec2 d=vUv-0.5; float r2=dot(d,d);
+      vec3 c = texture2D(tDiffuse,vUv).rgb;
+      c *= smoothstep(1.05,0.10,r2*1.45);
+      float g=hash(vUv*vec2(1920.0,1080.0)+uT*37.0)-0.5;
+      c += g*0.016*(1.0-0.6*smoothstep(0.0,0.5,dot(c,vec3(0.33))));
+      gl_FragColor=vec4(pow(max(c,0.0),vec3(0.98)),1.0);
+    }`
+});
+finalPass.renderToScreen = true;
+composer.addPass(finalPass);
+
+/* ── seeding ──────────────────────────────────────────────────────── */
+function seed(){
+  const s = Math.random()*1000;
+  seedPos.uniforms.uSeed.value = s; pass(seedPos, posA);
+  seedDir.uniforms.uSeed.value = s; pass(seedDir, dirA);
+  pass(clearVol, volA); pass(clearVol, volB);
+  hintEl.textContent = 'click to drop food · drag to turn';
+}
+seed();
+
+/* ── input ────────────────────────────────────────────────────────── */
+let down=false, moveDist=0, lastX=0, lastY=0, ndcX=0, ndcY=0;
+canvas.addEventListener('pointerdown',e=>{
+  try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+  down=true; moveDist=0; lastX=e.clientX; lastY=e.clientY;
+  canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove',e=>{
+  const r=canvas.getBoundingClientRect();
+  ndcX=((e.clientX-r.left)/r.width)*2-1;
+  ndcY=-((e.clientY-r.top)/r.height)*2+1;
+  if(down && e.buttons===0){ down=false; canvas.classList.remove('dragging'); }
+  if(!down) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  moveDist += Math.abs(dx)+Math.abs(dy);
+  azV -= dx*0.0045; elV += dy*0.0032;
+});
+addEventListener('pointerup',()=>{
+  canvas.classList.remove('dragging');
+  if(down && moveDist < 9) addFood(ndcX, ndcY);
+  down=false;
+});
+addEventListener('pointercancel',()=>{ down=false; });
+document.getElementById('seed').addEventListener('click',()=>{ seed(); });
+document.getElementById('clear').addEventListener('click',()=>{
+  food.length = 0; syncFood(); hintEl.textContent='click to drop food · drag to turn';
+});
+
+/* ── loop ─────────────────────────────────────────────────────────── */
+const clock = new THREE.Clock();
+let t=0, visible=true, tier=0, slowRuns=0, acc=0, frames=0;
+const TIERS=[{dpr:1.0, steps:88},{dpr:0.8, steps:68},{dpr:0.62, steps:52},{dpr:0.5, steps:40}];
+
+function resize(){
+  const r=canvas.getBoundingClientRect();
+  const dpr=Math.min(devicePixelRatio||1, TIERS[tier].dpr);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(r.width,r.height,false);
+  composer.setPixelRatio(dpr); composer.setSize(r.width,r.height);
+  bloom.setSize(r.width*dpr,r.height*dpr);
+  view.uniforms.uAspect.value = r.width/r.height;
+  view.uniforms.uSteps.value = TIERS[tier].steps;
+}
+addEventListener('resize',resize);
+new ResizeObserver(resize).observe(canvas);
+resize();
+new IntersectionObserver(es=>{ visible=es[0].isIntersecting; },{threshold:0.01}).observe(canvas);
+
+function tick(){
+  requestAnimationFrame(tick);
+  if(!visible){ clock.getDelta(); return; }
+  const dt=Math.min(clock.getDelta(),0.05);
+  t+=dt;
+
+  acc+=dt; frames++;
+  if(frames>=70){
+    if(acc/frames > 0.028){ if(++slowRuns>=2 && tier<TIERS.length-1){ tier++; slowRuns=0; resize(); } }
+    else slowRuns=0;
+    acc=0; frames=0;
+  }
+
+  az+=azV; el=Math.max(-0.9, Math.min(1.25, el+elV));
+  azV*=Math.pow(0.003,dt); elV*=Math.pow(0.003,dt);
+  if(!reduced && !down) drift += dt*0.045;
+  placeCamera();
+
+  // 1. steer
+  agentDir.uniforms.tPos.value = posA.texture;
+  agentDir.uniforms.tDir.value = dirA.texture;
+  agentDir.uniforms.tVol.value = volA.texture;
+  agentDir.uniforms.uSeed.value = t*13.0;
+  pass(agentDir, dirB);
+  [dirA, dirB] = [dirB, dirA];
+
+  // 2. move
+  agentPos.uniforms.tPos.value = posA.texture;
+  agentPos.uniforms.tDir.value = dirA.texture;
+  agentPos.uniforms.uDt.value = dt;
+  pass(agentPos, posB);
+  [posA, posB] = [posB, posA];
+
+  // 3. diffuse + decay + food
+  diffuse.uniforms.tVol.value = volA.texture;
+  pass(diffuse, volB);
+
+  // 4. deposit on top of the diffused field
+  depMat.uniforms.tPos.value = posA.texture;
+  renderer.setRenderTarget(volB);
+  renderer.autoClear = false;
+  renderer.render(depScene, quadCam);
+  renderer.autoClear = true;
+  renderer.setRenderTarget(null);
+  [volA, volB] = [volB, volA];
+
+  // 5. view
+  view.uniforms.tVol.value = volA.texture;
+  view.uniforms.uSeed.value = t*60.0;
+  view.uniforms.uT.value = t;
+  finalPass.uniforms.uT.value = t;
+  composer.render();
+
+  statEl.innerHTML = food.length
+    ? `<i>${food.length}</i> food · <em>262k</em> agents`
+    : `<em>262k</em> agents · searching`;
+}
+tick();
+
+canvas.addEventListener('webglcontextlost',e=>{ e.preventDefault(); });
+</script>
+</body>
+</html>

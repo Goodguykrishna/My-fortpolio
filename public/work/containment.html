@@ -1,0 +1,1598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Containment</title>
+<style>
+  :root{
+    --bg:#05060a; --ink:#e8ebef; --dim:#69717b; --line:#151a21;
+    --glow:#8fd0ff; --hot:#ffd8a0;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .stage{min-height:100svh;display:grid;place-items:center;padding:64px 24px}
+  .rig{width:100%;max-width:1440px;display:grid;
+    grid-template-columns:260px minmax(0,1fr) 260px;gap:80px;align-items:center}
+
+  .kicker{font-family:var(--mono);font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);margin:0 0 20px}
+  .title{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.02;
+    letter-spacing:-.02em;margin:0 0 20px}
+  .title em{font-style:italic;color:var(--glow)}
+  .lede{font-size:14px;line-height:1.65;color:#8f979f;margin:0}
+
+  .meta{font-family:var(--mono);font-size:10.5px;line-height:2.1;color:var(--dim);letter-spacing:.04em}
+  .meta b{display:block;color:#848d96;font-weight:400;letter-spacing:.18em;
+    text-transform:uppercase;font-size:9px;margin-bottom:10px}
+  .meta .k{color:#b0b8c0}
+  .rule{height:1px;background:var(--line);margin:22px 0}
+  .btn{appearance:none;background:none;border:0;padding:0;cursor:pointer;display:block;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);transition:color .3s}
+  .btn:hover{color:var(--glow)}
+
+  .frame{position:relative;margin:0;width:100%;aspect-ratio:4/3;
+    background:#04050a;overflow:hidden;
+    box-shadow:0 0 0 1px #11161d, 0 60px 120px -50px #000}
+  .frame canvas{display:block;width:100%;height:100%;touch-action:none;cursor:pointer}
+  .frame canvas.holding{cursor:grabbing}
+  .edge{position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 100px 34px rgba(0,0,0,.55)}
+
+  /* strain meter — the interaction has to be legible before it is pretty */
+  .gauge{position:absolute;left:18px;right:18px;top:16px;height:2px;
+    background:#151a22;pointer-events:none;overflow:hidden}
+  .gauge i{display:block;height:100%;width:0%;background:var(--glow);
+    transition:background .2s}
+  .gauge.hot i{background:var(--hot)}
+  .hud{position:absolute;left:18px;right:18px;bottom:15px;display:flex;
+    justify-content:space-between;gap:16px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.2em;text-transform:uppercase;color:#5c646d;pointer-events:none;transition:color .4s}
+  .frame:hover .hud{color:#8d959d}
+  .hud em{font-style:normal;color:var(--glow)}
+  .hud i{font-style:normal;color:var(--hot)}
+
+  @media (max-width:1100px){
+    .rig{grid-template-columns:1fr;gap:36px;max-width:620px}
+    .frame{aspect-ratio:1/1;order:-1}
+    .title{font-size:34px}
+  }
+</style>
+<script>if(location.search.includes('bare'))document.documentElement.classList.add('bare')</script>
+<style>
+  html.bare .left,html.bare .right,html.bare .hud,html.bare .edge,html.bare .glass{display:none!important}
+  html.bare .stage{padding:0;min-height:100vh}
+  html.bare .rig{display:block;max-width:none;width:100vw;height:100vh}
+  html.bare .frame{width:100vw;height:100vh;aspect-ratio:auto!important;border:0;border-radius:0;box-shadow:none}
+</style>
+</head>
+<body>
+<section class="stage">
+  <div class="rig">
+
+    <div class="left">
+      <p class="kicker">Ⅳ · Containment · a loop</p>
+      <h1 class="title">Something is<br><em>in</em> there.</h1>
+      <p class="lede">The glass is holding something, and it does not want to be held. Press on it. It will strain, then craze, then fail — and what comes out bends the light around it, and the wreckage with it.</p>
+    </div>
+
+    <figure class="frame">
+      <canvas id="c"></canvas>
+      <div class="edge"></div>
+      <div class="gauge" id="gauge"><i id="gfill"></i></div>
+      <div class="hud">
+        <span id="hint">press and hold the cube</span>
+        <span id="stat"></span>
+      </div>
+    </figure>
+
+    <div class="right">
+      <div class="meta">
+        <b>One control</b>
+        <span class="k">Hold the cube</span> &nbsp;it strains, then fails<br>
+        <span class="k">Drag</span> &nbsp;orbit the singularity<br>
+        <span class="k">Wait</span> &nbsp;it eats everything<br>
+        <span class="k">Tap the bowl</span> &nbsp;break it<br>
+        <span class="k">Or wait</span> &nbsp;it mends itself in gold<br>
+        <span class="k">Reset</span> &nbsp;start the loop over<br>
+      </div>
+      <div class="rule"></div>
+      <div class="meta">
+        <b>What it was holding</b>
+        The singularity is integrated,<br>
+        not painted: every photon is<br>
+        bent step by step through a<br>
+        Schwarzschild field. The disk<br>
+        wraps overhead because the<br>
+        light from behind is lensed<br>
+        over the top. The bright limb<br>
+        is the side rotating toward<br>
+        you — Doppler beaming.
+      </div>
+      <div class="rule"></div>
+      <button class="btn" id="reset">↺ &nbsp;Reset</button>
+    </div>
+
+  </div>
+</section>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTAINMENT
+   A tesseract — a 4-dimensional cube — rotating in the XW/YW/ZW planes
+   and projected into 3D, held inside a glass cube.
+   Hold: strain rises, the glass cracks. Hold longer: it shatters.
+   Let go: it reseals. One verb, visible at every step.
+   ═══════════════════════════════════════════════════════════════════ */
+
+const canvas  = document.getElementById('c');
+const hintEl  = document.getElementById('hint');
+const statEl  = document.getElementById('stat');
+const gEl     = document.getElementById('gauge');
+const gFill   = document.getElementById('gfill');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false,
+  powerPreference:'high-performance' });
+renderer.outputColorSpace    = THREE.SRGBColorSpace;
+renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene  = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(30, 4/3, 0.1, 100);
+const CENTER = new THREE.Vector3(0,0,0);
+
+/* ── the field of stars behind everything ───────────────────────── */
+const SKY = `
+  float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123); }
+  float h31(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453123); }
+  float vn3(vec3 p){
+    vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+    return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
+               mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z);
+  }
+  float fbm3(vec3 p){ float a=0.5,s=0.0; for(int i=0;i<5;i++){ s+=a*vn3(p); p*=2.07; a*=0.5; } return s; }
+  vec3 starField(vec3 d){
+    d = normalize(d);
+    // dust, so the void is not flat black
+    float neb = fbm3(d*2.4);
+    vec3 col = mix(vec3(0.006,0.008,0.018), vec3(0.030,0.038,0.075), smoothstep(0.35,0.75,neb));
+    col += vec3(0.055,0.030,0.070) * pow(smoothstep(0.55,0.95,fbm3(d*1.3+11.0)), 2.0);
+    // three passes of stars at different densities
+    for(int k=0;k<3;k++){
+      float sc = 90.0 + float(k)*150.0;
+      vec3 g = d*sc;
+      vec3 c = floor(g);
+      vec3 o = vec3(h31(c), h31(c+3.1), h31(c+7.7));
+      float m = h31(c+19.3);
+      if(m > 0.986 - float(k)*0.002){
+        float dd = length(fract(g) - o);
+        float b = smoothstep(0.30, 0.0, dd);
+        float tw = 0.65 + 0.35*sin(m*90.0);
+        vec3 sc2 = mix(vec3(0.72,0.82,1.0), vec3(1.0,0.86,0.66), h31(c+41.0));
+        col += sc2 * b*b*b * tw * (0.5 + 1.4*float(3-k)*0.3);
+      }
+    }
+    return col;
+  }
+`;
+const sky = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 32),
+  new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, uniforms:{},
+    vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: SKY + `varying vec3 vP; void main(){ gl_FragColor = vec4(starField(vP), 1.0); }` }));
+scene.add(sky);
+
+/* ── environment for the glass ──────────────────────────────────── */
+function buildEnv(){
+  const s = new THREE.Scene();
+  s.add(new THREE.Mesh(new THREE.SphereGeometry(50,24,16),
+    new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, uniforms:{},
+      vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader:`varying vec3 vP; void main(){
+        float h=normalize(vP).y*0.5+0.5;
+        vec3 c=mix(vec3(0.010,0.013,0.028), vec3(0.075,0.105,0.185), pow(h,1.3));
+        c=mix(c, vec3(0.42,0.52,0.72), pow(max(h-0.70,0.0)*3.2,2.0));
+        gl_FragColor=vec4(c,1.0); }` })));
+  const card=(w,h,col,int,pos,rot)=>{
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+      new THREE.MeshBasicMaterial({ color:new THREE.Color(col).multiplyScalar(int), side:THREE.DoubleSide }));
+    m.position.set(...pos); m.rotation.set(...rot); s.add(m);
+  };
+  card(26,20,0xdce8ff, 2.3, [-11,10, 8], [0, 0.72,0]);
+  card(26,20,0xffe8d4, 0.9, [ -3,15, 2], [-1.15,0,0]);
+  card(20, 7,0x9fc4ff, 1.8, [ 12, 4,-9], [0,-1.00,0]);
+  card(12, 4,0xffd0a0, 1.0, [  0,-4, 8], [0.40,0,0]);
+  return s;
+}
+let starEnv = null, studioEnv = null;
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+starEnv = pmrem.fromScene(buildEnv(), 0.02).texture;
+studioEnv = pmrem.fromScene(studioScene(), 0.03).texture;
+scene.environment = starEnv;
+
+/* ══════════ the glass cube ═════════════════════════════════════════ */
+const CSEG = 9;
+let cubeGeo = new THREE.BoxGeometry(2.05, 2.05, 2.05, CSEG, CSEG, CSEG).toNonIndexed();
+{
+  // the same jittered cell field the crack shader draws, evaluated on the CPU,
+  // so each shard that flies off is exactly one cell of the web you saw craze
+  const CS = 1.62;
+  const h21 = (x,y)=>{ const v=Math.sin(x*127.1+y*311.7)*43758.5453; return v-Math.floor(v); };
+  function cellOf(px,py,pz){
+    const gx=px*CS, gy=py*CS, gz=pz*CS;
+    const fx=Math.floor(gx), fy=Math.floor(gy), fz=Math.floor(gz);
+    let bd=1e9, bc=[0,0,0];
+    for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) for(let k=-1;k<=1;k++){
+      const cx=fx+i, cy=fy+j, cz=fz+k;
+      const ox=h21(cx,cy+cz), oy=h21(cy,cz+cx), oz=h21(cz,cx+cy);
+      const dx=gx-(cx+ox), dy=gy-(cy+oy), dz=gz-(cz+oz);
+      const d=dx*dx+dy*dy+dz*dz;
+      if(d<bd){ bd=d; bc=[(cx+ox)/CS,(cy+oy)/CS,(cz+oz)/CS]; }
+    }
+    return bc;
+  }
+  const P = cubeGeo.attributes.position;
+  const n = P.count;
+  const aC = new Float32Array(n*3);
+  const aR = new Float32Array(n);
+  for(let t=0;t<n;t+=3){
+    let cx=0, cy=0, cz=0;
+    for(let k=0;k<3;k++){ cx+=P.getX(t+k); cy+=P.getY(t+k); cz+=P.getZ(t+k); }
+    const c = cellOf(cx/3, cy/3, cz/3);
+    const r = h21(c[0]*37.3, c[1]*91.7 + c[2]*13.1);
+    for(let k=0;k<3;k++){
+      aC[(t+k)*3]=c[0]; aC[(t+k)*3+1]=c[1]; aC[(t+k)*3+2]=c[2];
+      aR[t+k]=r;
+    }
+  }
+  cubeGeo.setAttribute('aC', new THREE.BufferAttribute(aC,3));
+  cubeGeo.setAttribute('aR', new THREE.BufferAttribute(aR,1));
+}
+
+const uni = {
+  uStrain:{value:0}, uBurst:{value:0}, uEat:{value:0}, uHit:{value:new THREE.Vector3(0,0,1)},
+  uT:{value:0},
+};
+const glass = new THREE.MeshPhysicalMaterial({
+  color:0xcfe6ff, metalness:0.0, roughness:0.085,
+  transmission:0.40, thickness:1.6, ior:1.55,
+  transparent:true, side:THREE.FrontSide,
+  clearcoat:1.0, clearcoatRoughness:0.03,
+  envMapIntensity:2.15, attenuationDistance:0.95,
+  attenuationColor:new THREE.Color(0x4f86c9), specularIntensity:1.0,
+});
+glass.opacity = 0.96; glass.transparent = true;
+glass.onBeforeCompile = (sh)=>{
+  Object.assign(sh.uniforms, uni);
+  sh.vertexShader = `
+    attribute vec3 aC; attribute float aR;
+    uniform float uStrain, uBurst, uEat, uT;
+    varying vec3 vLP; varying float vR; varying vec3 vSC;
+  ` + sh.vertexShader
+    .replace('#include <beginnormal_vertex>', `
+      #include <beginnormal_vertex>
+      vLP = position; vR = aR; vSC = aC;
+      // shards fly straight out along their own normal, and come straight back
+      // thrown out, then wound in on a spiral and swallowed
+      float amp = uBurst * (0.55 + 1.25*aR) * (1.0 - uEat*0.55);
+      float ang = uBurst * (aR - 0.5) * 3.4 + uEat * (aR - 0.5) * 14.0;
+      vec3 ax = normalize(vec3(aR-0.5, fract(aR*7.3)-0.5, fract(aR*3.1)-0.5) + 1e-4);
+      float ca = cos(ang), sa = sin(ang);
+      vec3 rel = position - aC;
+      rel = rel*ca + cross(ax,rel)*sa + ax*dot(ax,rel)*(1.0-ca);
+      objectNormal = objectNormal*ca + cross(ax,objectNormal)*sa + ax*dot(ax,objectNormal)*(1.0-ca);
+      vec3 disp = aC + rel + normalize(aC + 1e-4) * amp;
+      // the spiral: swing around the hole, fall inward, stretch as it goes
+      float ei  = uEat*uEat;
+      float sw  = ei * (5.0 + 7.0*aR);
+      float cw = cos(sw), sw2 = sin(sw);
+      vec3  spun = vec3(disp.x*cw - disp.z*sw2, disp.y, disp.x*sw2 + disp.z*cw);
+      spun *= (1.0 - ei*0.94);
+      spun.y *= (1.0 - ei*0.55);
+      spun += normalize(vec3(-disp.z, 0.0, disp.x) + 1e-4) * ei * 0.55 * aR;   // shear
+      disp = mix(disp, spun, smoothstep(0.02, 0.55, uEat));
+      // a shiver before it goes
+      disp += normalize(aC+1e-4) * sin(uT*46.0 + aR*30.0) * uStrain*uStrain*0.022;
+    `)
+    .replace('#include <begin_vertex>', `
+      vec3 transformed = disp;
+    `);
+
+  sh.fragmentShader = `
+    uniform float uStrain, uBurst, uEat, uT; uniform vec3 uHit;
+    varying vec3 vLP; varying float vR; varying vec3 vSC;
+    float h21(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    // distance to the nearest boundary of a jittered cell grid = a crack web
+    float crackWeb(vec3 p){
+      vec3 g = p*1.62;
+      float d1 = 9.0, d2 = 9.0;
+      for(int i=-1;i<=1;i++) for(int j=-1;j<=1;j++) for(int k=-1;k<=1;k++){
+        vec3 c = floor(g) + vec3(float(i),float(j),float(k));
+        vec3 o = vec3(h21(c.xy+c.z), h21(c.yz+c.x), h21(c.zx+c.y));
+        float d = length(g - (c + o));
+        if(d < d1){ d2 = d1; d1 = d; } else if(d < d2){ d2 = d; }
+      }
+      return d2 - d1;
+    }
+  ` + sh.fragmentShader
+    .replace('#include <emissivemap_fragment>', `
+      #include <emissivemap_fragment>
+      float web  = 1.0 - smoothstep(0.0, 0.030 + 0.045*uStrain, crackWeb(vLP));
+      float wave = distance(vLP, uHit) - uStrain*2.7;        // spreads from where you pressed
+      float open = 1.0 - smoothstep(-0.25, 0.22, wave);
+      float lit  = web * open * smoothstep(0.02, 0.22, uStrain);
+      vec3 cc = mix(vec3(0.45,0.80,1.0), vec3(1.0,0.92,0.72), uStrain);
+      totalEmissiveRadiance += cc * lit * (0.12 + 1.15*uStrain*uStrain);
+      totalEmissiveRadiance += vec3(0.30,0.55,0.95) * uBurst * 0.10 * (1.0-uEat);
+      diffuseColor.a *= 1.0 - uEat*0.85;
+    `);
+};
+const cube = new THREE.Mesh(cubeGeo, glass);
+scene.add(cube);
+
+// the cube's own twelve edges — this is what makes it read as an object
+const rimMat = new THREE.MeshBasicMaterial({ color:0xa9d4f5, toneMapped:true });
+const rim = new THREE.Group();
+{
+  const L = 2.05, r = 0.017, h = L/2, inset = 0.052;
+  const bar = new THREE.CylinderGeometry(r, r, L - inset*2, 10);
+  const bead = new THREE.SphereGeometry(r*1.15, 12, 10);
+  const mk = (pos, rot)=>{ const m=new THREE.Mesh(bar, rimMat); m.position.set(...pos); m.rotation.set(...rot); rim.add(m); };
+  for(const sx of [-h,h]) for(const sz of [-h,h]) mk([sx,0,sz],[0,0,0]);
+  for(const sy of [-h,h]) for(const sz of [-h,h]) mk([0,sy,sz],[0,0,Math.PI/2]);
+  for(const sx of [-h,h]) for(const sy of [-h,h]) mk([sx,sy,0],[Math.PI/2,0,0]);
+  for(const sx of [-h,h]) for(const sy of [-h,h]) for(const sz of [-h,h]){
+    const m=new THREE.Mesh(bead, rimMat); m.position.set(sx,sy,sz); rim.add(m);
+  }
+}
+scene.add(rim);
+
+/* a faint shell that survives the shatter, so the volume stays readable */
+const cageMat = new THREE.MeshBasicMaterial({
+  color:0x2a4c72, wireframe:true, transparent:true, opacity:0.0,
+  depthWrite:false, toneMapped:true });
+const cage = new THREE.Mesh(new THREE.BoxGeometry(2.05,2.05,2.05), cageMat);
+scene.add(cage);
+
+/* ══════════ the construct ══════════ */
+const conMat = new THREE.MeshBasicMaterial({
+  color:0x6f5433, wireframe:true, transparent:true, opacity:0, depthWrite:false, toneMapped:true });
+const construct = new THREE.Group();
+for(let i=0;i<9;i++){
+  const k = 2.6 + i*2.05;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(k,k,k,1,1,1), conMat.clone());
+  m.userData.i = i;
+  construct.add(m);
+}
+construct.visible = false;
+scene.add(construct);
+
+
+/* ══════════════════ THE BOWL ══════════════════ */
+const CELLS = 24, SEG = 224, PROF = 132, FLOOR = 0.0, GRAV = -15.5;
+const IDENT = new THREE.Quaternion();
+let rnd = mulberry32(0x5eed);
+function mulberry32(a){ return function(){
+  a|=0; a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; };}
+function h3(x,y,z){ const s=Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453; return s-Math.floor(s); }
+function vn3(x,y,z){
+  const ix=Math.floor(x),iy=Math.floor(y),iz=Math.floor(z);
+  let fx=x-ix,fy=y-iy,fz=z-iz;
+  fx=fx*fx*(3-2*fx); fy=fy*fy*(3-2*fy); fz=fz*fz*(3-2*fz);
+  const L=(a,b,t)=>a+(b-a)*t;
+  return L(L(L(h3(ix,iy,iz),h3(ix+1,iy,iz),fx), L(h3(ix,iy+1,iz),h3(ix+1,iy+1,iz),fx), fy),
+           L(L(h3(ix,iy,iz+1),h3(ix+1,iy,iz+1),fx), L(h3(ix,iy+1,iz+1),h3(ix+1,iy+1,iz+1),fx), fy), fz);
+}
+const ease  = t => 1-Math.pow(1-t,3);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const sndTap=()=>{}, sndCrack=()=>{}, sndShatter=()=>{}, sndLand=()=>{}, sndChime=()=>{};
+/* ══════════ profile ══════════ */
+const PROFILE=[
+  [0.00,0.62],[1.10,0.60],[2.10,0.74],[3.05,1.38],[3.90,2.30],[4.42,3.06],
+  [4.60,3.46],[4.70,3.55],[4.76,3.52],[4.68,3.24],[4.24,2.50],[3.54,1.56],
+  [2.86,0.78],[2.46,0.34],[2.38,0.06],[2.34,0.00],[1.98,0.00],[1.88,0.26],
+  [1.76,0.38],[1.10,0.42],[0.00,0.40],
+];
+function profileCurve(n){
+  const pts=PROFILE.map(p=>new THREE.Vector3(p[0],p[1],0));
+  return new THREE.CatmullRomCurve3(pts,false,'centripetal',0.5)
+    .getSpacedPoints(n).map(v=>new THREE.Vector2(Math.max(v.x,0),v.y)).reverse();
+}
+
+/* ══════════ shard state ══════════ */
+const SH = Array.from({length:CELLS},()=>({
+  home:new THREE.Vector3(), rad:1,
+  off:new THREE.Vector3(),  vel:new THREE.Vector3(),
+  quat:new THREE.Quaternion(), angVel:new THREE.Vector3(),
+  brk:0, brkT:0, gild:0, heat:0, stress:0,
+  free:false, resting:false, settling:false, setT:0,
+  returning:false, retT:0, retFrom:new THREE.Vector3(), retQ:new THREE.Quaternion(),
+  restOff:new THREE.Vector3(), restQ:new THREE.Quaternion(),
+  fromOff:new THREE.Vector3(), fromQ:new THREE.Quaternion(),
+  freeT:0, fill:0, fillO:new THREE.Vector3(), retMid:new THREE.Vector3(),
+}));
+let adj = Array.from({length:CELLS},()=>new Set());
+
+const cellData = new Float32Array(CELLS*4*4);
+const cellTex  = new THREE.DataTexture(cellData, CELLS, 4, THREE.RGBAFormat, THREE.FloatType);
+cellTex.minFilter = cellTex.magFilter = THREE.NearestFilter;
+cellTex.needsUpdate = true;
+const kuni = { uCellData:{value:cellTex}, uCellCount:{value:CELLS} };
+
+const GLSL_NOISE = `
+float h31(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7)))*43758.5453123); }
+float vnoise(vec3 p){
+  vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(h31(i),h31(i+vec3(1,0,0)),f.x),
+                 mix(h31(i+vec3(0,1,0)),h31(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(h31(i+vec3(0,0,1)),h31(i+vec3(1,0,1)),f.x),
+                 mix(h31(i+vec3(0,1,1)),h31(i+vec3(1,1,1)),f.x),f.y),f.z);
+}
+float fbm(vec3 p){ float a=0.5,s=0.0; for(int i=0;i<5;i++){ s+=a*vnoise(p); p*=2.03; a*=0.5; } return s; }
+vec3 qrot(vec4 q, vec3 v){ return v + 2.0*cross(q.xyz, cross(q.xyz, v) + q.w*v); }
+`;
+
+/* seigaiha — staggered overlapping arcs, the oldest wave pattern there is */
+const GLSL_MOTIF = `
+float seigaiha(vec2 p){
+  float best = 1e9;
+  for(int j=-2;j<=0;j++){
+    for(int i=-1;i<=1;i++){
+      vec2 cell = floor(p) + vec2(float(i), float(j));
+      vec2 c = cell + vec2(mod(abs(cell.y), 2.0)*0.5 + 0.5, 0.5);
+      if(p.y < c.y) continue;              // only the upper arc of each circle is seen
+      float d = length(p - c);
+      if(d < best) best = d;
+    }
+  }
+  if(best > 0.78) return 0.0;
+  float k = fract(best * 5.4);
+  return smoothstep(0.26,0.40,k) * (1.0 - smoothstep(0.52,0.66,k));
+}
+/* one brushed ring, lifted at the end like a real stroke */
+float brushRing(vec2 p, float R, float seed){
+  float r = length(p), a = atan(p.y, p.x);
+  float w = 0.16 + 0.10*fbm(vec3(cos(a)*1.7+seed, sin(a)*1.7, 0.0));
+  float m = 1.0 - smoothstep(w*0.45, w, abs(r - R));
+  m *= smoothstep(0.0, 0.55, abs(mod(a + 3.1416, 6.2832) - 0.45));
+  m *= 0.45 + 0.75*fbm(vec3(p*7.0, seed));
+  return clamp(m, 0.0, 1.0);
+}
+`;
+
+const porcelain = new THREE.MeshPhysicalMaterial({
+  color:0xffffff, roughness:0.16, metalness:0.0,
+  clearcoat:1.0, clearcoatRoughness:0.10,
+  side:THREE.DoubleSide, envMapIntensity:0.95,
+});
+
+porcelain.onBeforeCompile = (sh)=>{
+  Object.assign(sh.uniforms, kuni);
+  sh.vertexShader = `
+    attribute float aCell;
+    attribute float aCellA;
+    attribute float aCellB;
+    attribute float aSeam;
+    attribute vec3  aCellCenter;
+    uniform sampler2D uCellData;
+    uniform float uCellCount;
+    varying float vSeam;
+    varying vec4  vCD;
+    varying vec3  vOP;
+    varying float vNR;
+    varying vec3  vFO;
+    varying float vFill;
+    ${GLSL_NOISE}
+    vec4 kQ; vec3 kOff; vec3 kCen;
+    vec4 cellRow(float c, float row){
+      return texture2D(uCellData, vec2((c+0.5)/uCellCount, (row+0.5)/4.0));
+    }
+  ` + sh.vertexShader
+    .replace('#include <beginnormal_vertex>', `
+    vec4 s0 = cellRow(aCell, 0.0);
+    kQ = cellRow(aCell, 1.0); kOff = s0.xyz; kCen = aCellCenter;
+    vec4 gA = cellRow(aCellA, 2.0), gB = cellRow(aCellB, 2.0);
+    vec4 bA = cellRow(aCellA, 0.0), bB = cellRow(aCellB, 0.0);
+    float bw = smoothstep(0.0, 0.34, aSeam);
+    vCD = mix(vec4(max(bA.w,bB.w), min(gA.x,gB.x), max(gA.y,gB.y), max(gA.w,gB.w)),
+              vec4(bA.w, gA.x, gA.y, gA.w), bw);
+    vec4 fA = cellRow(aCellA, 3.0), fB = cellRow(aCellB, 3.0);
+    vec4 fU = (bw < 0.5 && fB.w > fA.w) ? fB : fA;
+    vFO = fU.xyz; vFill = fU.w;
+    vSeam = aSeam; vOP = position;
+    vNR = dot(normalize(normal), normalize(vec3(position.x, 0.0, position.z) + vec3(1e-5)));
+    #include <beginnormal_vertex>
+    objectNormal = qrot(kQ, objectNormal);
+    `)
+    .replace('#include <begin_vertex>', `
+    #include <begin_vertex>
+    transformed = kCen + qrot(kQ, transformed - kCen) + kOff;
+    `);
+
+  sh.fragmentShader = `
+    varying float vSeam;
+    varying vec4  vCD;
+    varying vec3  vOP;
+    varying float vNR;
+    varying vec3  vFO;
+    varying float vFill;
+    ${GLSL_NOISE}
+    ${GLSL_MOTIF}
+  ` + sh.fragmentShader
+    .replace('#include <normal_fragment_maps>', `
+      #include <normal_fragment_maps>
+      vec3 _nj = vec3(fbm(vOP*34.0+1.7), fbm(vOP*34.0+9.3), fbm(vOP*34.0+4.1)) - 0.5;
+      normal = normalize(normal + _nj * (gl_FrontFacing ? 0.050 : 0.17));
+    `)
+    .replace('#include <color_fragment>', `
+      #include <color_fragment>
+      float _brk = vCD.x, _gild = vCD.y, _heat = vCD.z, _sep = vCD.w;
+      float n1 = fbm(vOP*3.1), n2 = fbm(vOP*21.0), nThick = fbm(vOP*8.5);
+      bool  _inner = !gl_FrontFacing;
+
+      float sJit = vSeam + (fbm(vOP*13.0)-0.5)*0.040 + (fbm(vOP*4.5)-0.5)*0.034;
+      float cut  = _sep * 0.290;
+      if(sJit < cut) discard;
+      float sd = sJit - cut;
+      float seamW = 0.064 + _brk*0.098 + n1*0.028;
+      float sBand = 1.0 - smoothstep(0.0, seamW, sd);
+      float sCore = 1.0 - smoothstep(0.0, seamW*0.58, sd);
+      float broken = smoothstep(0.02, 0.32, _brk);
+
+      float gold = sBand * _gild * broken * (0.82 + 0.46*nThick) * 1.45;
+      gold = clamp(gold, 0.0, 1.0);
+      if(_inner) gold *= 0.25;
+
+      // the gold wells out of one point on the joint and runs along the crack
+      float dSrc  = distance(vOP, vFO) + (fbm(vOP*6.0)-0.5)*0.55;
+      float front = vFill * 9.0;
+      float run   = smoothstep(front + 0.30, front - 0.12, dSrc);
+      float wet   = exp(-pow((dSrc - front)*3.4, 2.0)) * step(0.001, vFill) * (1.0 - step(0.999, vFill));
+      gold *= run;
+
+      /* ---- porcelain ---- */
+      float rad = length(vOP.xz), ang = atan(vOP.z, vOP.x);
+      vec3 white = vec3(0.815, 0.810, 0.782) * (0.96 + 0.07*n1);
+      // kan'nyu: the fine crackle a real glaze develops
+      float cz = fbm(vOP*46.0);
+      white *= 1.0 - smoothstep(0.505, 0.532, cz)*0.10;
+
+      /* ---- sometsuke: cobalt under the glaze ---- */
+      float cav  = smoothstep(-0.06, -0.30, vNR);     // inside the bowl
+      float wall = smoothstep( 0.06,  0.30, vNR);     // outside
+
+      float mo = 0.0;
+      // seigaiha wave band around the outer wall
+      mo += seigaiha(vec2(ang*2.55, (vOP.y-1.05)*1.55))
+            * wall * smoothstep(1.05,1.40,vOP.y) * (1.0-smoothstep(3.22,3.46,vOP.y)) * 1.25;
+      // a narrower band repeats just under the lip inside, where the eye lands first
+      mo += seigaiha(vec2(ang*3.6, (vOP.y-2.86)*4.6))
+            * cav * smoothstep(2.86,2.96,vOP.y) * (1.0-smoothstep(3.30,3.42,vOP.y)) * 1.15;
+      // one brushed ring in the well, inside
+      mo += brushRing(vOP.xz, 1.62, 3.7) * cav * (1.0 - smoothstep(1.10,1.55,vOP.y)) * 1.35;
+      // the lip, and a single line above the foot
+      mo += smoothstep(3.41, 3.48, vOP.y) * 0.95;
+      mo += wall * smoothstep(0.30,0.33,vOP.y) * (1.0-smoothstep(0.40,0.43,vOP.y)) * 0.85;
+      // cobalt bleeds and pools; it is never flat
+      mo *= 0.68 + 0.62*fbm(vOP*5.5);
+      mo = clamp(mo, 0.0, 1.0);
+
+      vec3 cobalt = mix(vec3(0.070,0.115,0.300), vec3(0.020,0.045,0.175), fbm(vOP*2.2));
+      vec3 glazed = mix(white, cobalt, mo);
+      glazed *= mix(1.0, 0.05, sCore*broken*(1.0-_gild));
+
+      // a fracture shows unglazed biscuit — matte, warmer, no motif
+      vec3 biscuit = vec3(0.520,0.487,0.442) * (0.80 + 0.38*n2);
+      vec3 base = _inner ? biscuit : glazed;
+
+      vec3 goldC = vec3(1.00, 0.715, 0.290);
+      diffuseColor.rgb = mix(base, goldC, gold);
+    `)
+    .replace('#include <roughnessmap_fragment>', `
+      #include <roughnessmap_fragment>
+      float ceramR = _inner ? (0.80 + 0.15*n2) : (0.10 + 0.09*n2 + mo*0.05);
+      roughnessFactor = mix(ceramR*1.25, 0.115 + 0.165*nThick, smoothstep(0.08,0.5,gold));
+    `)
+    .replace('#include <metalnessmap_fragment>', `
+      #include <metalnessmap_fragment>
+      metalnessFactor = smoothstep(0.06, 0.38, gold);
+    `)
+    .replace('#include <lights_physical_fragment>', `
+      #include <lights_physical_fragment>
+      material.clearcoat = _inner ? 0.0 : mix(1.0, 0.35, smoothstep(0.15,0.6,gold));
+      material.clearcoatRoughness = clamp(0.095 + 0.20*n2 + 0.08*n1 - 0.03*gold, 0.03, 1.0);
+    `)
+    .replace('#include <aomap_fragment>', `
+      float _ao = mix(0.52, 1.0, smoothstep(0.05, 2.95, vOP.y));
+      _ao *= mix(mix(1.0, 0.62, broken), 1.0, smoothstep(0.0, 0.26, vSeam));
+      reflectedLight.indirectDiffuse  *= _ao;
+      reflectedLight.indirectSpecular *= _ao;
+      #if defined( USE_CLEARCOAT )
+        clearcoatSpecularIndirect *= mix(0.55, 1.0, _ao);
+      #endif
+    `)
+    .replace('#include <emissivemap_fragment>', `
+      #include <emissivemap_fragment>
+      float glow = max(_heat, wet);
+      vec3 molten = mix(vec3(1.0,0.34,0.06), vec3(1.0,0.88,0.58), glow);
+      totalEmissiveRadiance += molten * gold * glow * 2.3;
+      totalEmissiveRadiance += molten * sBand * broken * wet * 1.1;   // the wet leading bead
+      totalEmissiveRadiance += goldC * gold * 0.30;
+    `);
+};
+
+const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+depthMat.onBeforeCompile = (sh)=>{
+  Object.assign(sh.uniforms, kuni);
+  sh.vertexShader = `
+    attribute float aCell;
+    attribute vec3  aCellCenter;
+    uniform sampler2D uCellData;
+    uniform float uCellCount;
+    vec3 dqrot(vec4 q, vec3 v){ return v + 2.0*cross(q.xyz, cross(q.xyz, v) + q.w*v); }
+  ` + sh.vertexShader.replace('#include <begin_vertex>', `
+    #include <begin_vertex>
+    vec4 dOff = texture2D(uCellData, vec2((aCell+0.5)/uCellCount, 0.5/4.0));
+    vec4 dQ   = texture2D(uCellData, vec2((aCell+0.5)/uCellCount, 1.5/4.0));
+    transformed = aCellCenter + dqrot(dQ, transformed - aCellCenter) + dOff.xyz;
+  `);
+};
+
+/* ══════════ build ══════════ */
+let vessel=null, cellCenters=[];
+
+function buildVessel(seed){
+  rnd = mulberry32(seed);
+  let geo = new THREE.LatheGeometry(profileCurve(PROF), SEG);
+  const pos = geo.attributes.position, wob = rnd()*40;
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i), y=pos.getY(i), z=pos.getZ(i), r=Math.hypot(x,z);
+    if(r<1e-4) continue;
+    const a=Math.atan2(z,x);
+    const n  = vn3(Math.cos(a)*1.6+wob, Math.sin(a)*1.6+wob, y*0.55)-0.5;
+    const n2 = vn3(Math.cos(a)*4.1+wob, Math.sin(a)*4.1+wob, y*1.6)-0.5;
+    const amp = 0.085*(0.35+y*0.22);
+    const nr = r + n*amp + n2*amp*0.32;
+    pos.setX(i, Math.cos(a)*nr); pos.setZ(i, Math.sin(a)*nr);
+    pos.setY(i, y + n*0.045*Math.min(y,1.0));
+  }
+  geo.computeVertexNormals();
+  geo = geo.toNonIndexed();
+
+  const P = geo.attributes.position;
+  const pool=[], stride=Math.max(1,Math.floor(P.count/5000));
+  for(let i=0;i<P.count;i+=stride) pool.push(new THREE.Vector3(P.getX(i),P.getY(i),P.getZ(i)));
+  const seeds=[pool[Math.floor(rnd()*pool.length)].clone()];
+  const dmin=new Float32Array(pool.length).fill(1e9);
+  while(seeds.length<CELLS){
+    const s=seeds[seeds.length-1]; let bi=0,bd=-1;
+    for(let i=0;i<pool.length;i++){
+      const d=pool[i].distanceToSquared(s);
+      if(d<dmin[i]) dmin[i]=d;
+      const dj=dmin[i]*(0.75+rnd()*0.5);
+      if(dj>bd){ bd=dj; bi=i; }
+    }
+    seeds.push(pool[bi].clone());
+  }
+
+  const n=P.count;
+  const aSeam=new Float32Array(n), aCellA=new Float32Array(n), aCellB=new Float32Array(n);
+  const near1=new Int32Array(n), v=new THREE.Vector3();
+  adj = Array.from({length:CELLS},()=>new Set());
+  for(let i=0;i<n;i++){
+    v.set(P.getX(i),P.getY(i),P.getZ(i));
+    let d1=1e9,d2=1e9,i1=0,i2=0;
+    for(let s=0;s<CELLS;s++){
+      const d=v.distanceTo(seeds[s]);
+      if(d<d1){ d2=d1; i2=i1; d1=d; i1=s; } else if(d<d2){ d2=d; i2=s; }
+    }
+    near1[i]=i1; aCellA[i]=i1; aCellB[i]=i2;
+    aSeam[i]=Math.min((d2-d1)/1.1,1.0);
+    if(aSeam[i] < 0.06){ adj[i1].add(i2); adj[i2].add(i1); }   // they share a real boundary
+  }
+
+  const aCell=new Float32Array(n);
+  for(let t=0;t<n;t+=3){ const c=near1[t]; aCell[t]=c; aCell[t+1]=c; aCell[t+2]=c; }
+
+  const acc=Array.from({length:CELLS},()=>({x:0,y:0,z:0,n:0}));
+  for(let i=0;i<n;i++){ const a=acc[aCell[i]|0];
+    a.x+=P.getX(i); a.y+=P.getY(i); a.z+=P.getZ(i); a.n++; }
+  cellCenters = acc.map(a=> a.n ? new THREE.Vector3(a.x/a.n,a.y/a.n,a.z/a.n)
+                                : new THREE.Vector3(0,1.6,0));
+  const rad=new Float32Array(CELLS);
+  for(let i=0;i<n;i++){ const c=aCell[i]|0;
+    v.set(P.getX(i),P.getY(i),P.getZ(i));
+    rad[c]=Math.max(rad[c], v.distanceTo(cellCenters[c])); }
+
+  const aCellCenter=new Float32Array(n*3);
+  for(let i=0;i<n;i++){ const c=cellCenters[aCell[i]|0];
+    aCellCenter[i*3]=c.x; aCellCenter[i*3+1]=c.y; aCellCenter[i*3+2]=c.z; }
+
+  geo.setAttribute('aCell',      new THREE.BufferAttribute(aCell,1));
+  geo.setAttribute('aCellA',     new THREE.BufferAttribute(aCellA,1));
+  geo.setAttribute('aCellB',     new THREE.BufferAttribute(aCellB,1));
+  geo.setAttribute('aSeam',      new THREE.BufferAttribute(aSeam,1));
+  geo.setAttribute('aCellCenter',new THREE.BufferAttribute(aCellCenter,3));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0,1.8,0), 40);
+  return { geo, rad };
+}
+
+const picker = new THREE.InstancedMesh(
+  new THREE.SphereGeometry(1,10,8), new THREE.MeshBasicMaterial(), CELLS);
+picker.frustumCulled = false;
+const _km4=new THREE.Matrix4(), _kv3=new THREE.Vector3(), _kq=new THREE.Quaternion(),
+      _ks3=new THREE.Vector3(), _ktmp=new THREE.Vector3(), _ktmp2=new THREE.Vector3();
+
+/* chips — porcelain debris. never recovered. */
+const CHIP_MAX = 260;
+const chips = new THREE.InstancedMesh(
+  new THREE.TetrahedronGeometry(0.13, 0),
+  new THREE.MeshStandardMaterial({ color:0xb9b4ab, roughness:0.72, metalness:0.0 }), CHIP_MAX);
+chips.count = 0;
+chips.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+const chipState = Array.from({length:CHIP_MAX},()=>({
+  p:new THREE.Vector3(), v:new THREE.Vector3(),
+  q:new THREE.Quaternion(), av:new THREE.Vector3(), s:1, rest:false, live:false }));
+let chipHead=0;
+function spawnChips(at, n, power){
+  for(let k=0;k<n;k++){
+    const c=chipState[chipHead]; chipHead=(chipHead+1)%CHIP_MAX;
+    if(chips.count<CHIP_MAX) chips.count++;
+    c.live=true; c.rest=false;
+    c.p.copy(at).add(new THREE.Vector3((Math.random()-.5)*0.6,(Math.random()-.5)*0.6,(Math.random()-.5)*0.6));
+    const dir=c.p.clone().sub(at).normalize();
+    c.v.copy(dir).multiplyScalar(1.8+Math.random()*3.6*power)
+      .add(new THREE.Vector3((Math.random()-.5)*2.0, 1.8+Math.random()*2.8*power, (Math.random()-.5)*2.0));
+    c.av.set((Math.random()-.5)*14,(Math.random()-.5)*14,(Math.random()-.5)*14);
+    c.q.set(Math.random(),Math.random(),Math.random(),Math.random()).normalize();
+    c.s=0.4+Math.random()*1.1;
+  }
+}
+
+/* ══════════ mount ══════════ */
+function mountVessel(seed){
+  const { geo, rad } = buildVessel(seed);
+  if(vessel){ vessel.geometry.dispose(); bowlGroup.remove(vessel); }
+  vessel = new THREE.Mesh(geo, porcelain);
+  vessel.customDepthMaterial = depthMat;
+  bowlGroup.add(vessel);
+
+  for(let i=0;i<CELLS;i++){
+    const s=SH[i];
+    s.home.copy(cellCenters[i]); s.rad=Math.max(rad[i],0.3);
+    s.off.set(0,0,0); s.vel.set(0,0,0);
+    s.quat.identity(); s.angVel.set(0,0,0);
+    s.brk=0; s.brkT=0; s.gild=0; s.heat=0; s.stress=0;
+    s.free=false; s.resting=false; s.settling=false; s.returning=false;
+    s.setT=0; s.retT=0; s.freeT=0; s.fill=0; s.fillO.set(0,1.6,0);
+  }
+  // it arrives already mended once — a contiguous cluster so the seams read
+  const start=Math.floor(rnd()*CELLS);
+  cellCenters.map((c,i)=>({i,d:c.distanceTo(cellCenters[start])}))
+    .sort((a,b)=>a.d-b.d).slice(0, 4+Math.floor(rnd()*2))
+    .forEach(({i})=>{ SH[i].brk=1; SH[i].brkT=1; SH[i].stress=0.72;
+      SH[i].gild=0.9+rnd()*0.1; SH[i].fill=1; SH[i].fillO.copy(cellCenters[start]); });
+
+  chips.count=0; chipHead=0; chipState.forEach(c=>{c.live=false;c.rest=false;});
+  pushState();
+}
+
+function pushState(){
+  for(let i=0;i<CELLS;i++){
+    const s=SH[i];
+    let o=i*4;
+    cellData[o]=s.off.x; cellData[o+1]=s.off.y; cellData[o+2]=s.off.z; cellData[o+3]=s.brk;
+    o=(CELLS+i)*4;
+    cellData[o]=s.quat.x; cellData[o+1]=s.quat.y; cellData[o+2]=s.quat.z; cellData[o+3]=s.quat.w;
+    o=(CELLS*2+i)*4;
+    cellData[o]=s.gild; cellData[o+1]=s.heat; cellData[o+2]=0;
+    cellData[o+3]=Math.min(1, s.off.length()/0.75);
+    o=(CELLS*3+i)*4;
+    cellData[o]=s.fillO.x; cellData[o+1]=s.fillO.y; cellData[o+2]=s.fillO.z; cellData[o+3]=s.fill;
+  }
+  cellTex.needsUpdate=true;
+}
+
+/* ══════════ break / support ══════════ */
+function planLanding(s){
+  const out = new THREE.Vector3(s.home.x, 0, s.home.z);
+  if(out.lengthSq()<1e-6) out.set(1,0,0);
+  out.normalize();
+  const ang = Math.atan2(out.z, out.x) + (Math.random()-.5)*0.9;
+  const rr  = 5.55 + Math.random()*0.85;
+  s.restOff.set(Math.cos(ang)*rr - s.home.x,
+                FLOOR + 0.09 + Math.random()*0.05 - s.home.y,
+                Math.sin(ang)*rr - s.home.z);
+  const face = _ktmp2.copy(s.home).sub(new THREE.Vector3(0,1.55,0)).normalize();
+  s.restQ.setFromUnitVectors(face, new THREE.Vector3(0, Math.random()<0.5?1:-1, 0));
+  s.restQ.premultiply(new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0,1,0), Math.random()*Math.PI*2));
+  s.settling=false; s.setT=0; s.freeT=0;
+}
+
+function release(i, impulse, spin){
+  const s=SH[i];
+  if(s.free) return;
+  s.free=true; s.resting=false; s.brkT=1; s.gild*=0.30;
+  s.vel.copy(impulse);
+  s.angVel.set((Math.random()-.5)*7,(Math.random()-.5)*7,(Math.random()-.5)*7).multiplyScalar(spin);
+  planLanding(s);
+}
+
+/* anything no longer connected down to the foot has nothing holding it up */
+function collapseUnsupported(){
+  const seen=new Set(), stack=[];
+  for(let i=0;i<CELLS;i++) if(!SH[i].free && SH[i].home.y < 0.95){ seen.add(i); stack.push(i); }
+  while(stack.length){
+    const c=stack.pop();
+    for(const n of adj[c]) if(!SH[n].free && !seen.has(n)){ seen.add(n); stack.push(n); }
+  }
+  let fell=0;
+  for(let i=0;i<CELLS;i++){
+    if(SH[i].free || seen.has(i)) continue;
+    const s=SH[i];
+    const out=_ktmp.set(s.home.x,0,s.home.z);
+    if(out.lengthSq()<1e-6) out.set(1,0,0);
+    out.normalize();
+    release(i, _ktmp2.copy(out).multiplyScalar(0.9 + Math.random()*0.8)
+                 .add(new THREE.Vector3(0, -0.4, 0)), 0.5);
+    spawnChips(s.home, 3, 0.3);
+    fell++;
+  }
+  if(fell) sndCrack(0.5);
+  return fell;
+}
+
+function strike(point, power){
+  let cracked=0, broke=0;
+  const R = 2.0 + power*3.0;
+  for(let i=0;i<CELLS;i++){
+    const s=SH[i];
+    if(s.free) continue;
+    const d = s.home.distanceTo(point);
+    if(d > R) continue;
+    const fall = Math.max(0, 1 - d/R);
+    const before = s.stress;
+    s.stress = Math.min(1.2, s.stress + (0.30 + 0.42*power) * (0.35 + fall));
+    if(s.stress >= 1.0){
+      const out=_ktmp.set(s.home.x,0,s.home.z);
+      if(out.lengthSq()<1e-6) out.set(1,0,0);
+      out.normalize();
+      _ktmp2.copy(s.home).sub(point);
+      if(_ktmp2.lengthSq()<1e-6) _ktmp2.set(0,1,0);
+      _ktmp2.normalize();
+      const mag=(3.0+fall*5.4)*power;
+      release(i, _ktmp2.multiplyScalar(mag*0.45)
+                      .addScaledVector(out, mag*1.30)
+                      .add(new THREE.Vector3(0, 1.9+fall*2.0*power, 0)), 0.4+power);
+      broke++;
+    } else if(s.stress >= 0.40){
+      s.brkT = 0.55;                                   // a visible crack, still holding
+      if(before < 0.40) cracked++;
+    }
+  }
+  if(broke){
+    spawnChips(point, 7+Math.round(power*15), power);
+    sndShatter(power);
+    hintEl.textContent = 'hover a piece · gold reaches from the body';
+  } else if(cracked){
+    sndCrack(power);
+    hintEl.textContent = 'it cracked · tap again';
+  } else {
+    sndTap(power);
+  }
+  if(broke) collapseUnsupported();
+}
+
+/* a loose piece may only be taken back if it still touches the standing body */
+function anchorFor(i){
+  let best=-1, bd=1e9;
+  for(const n of adj[i]){
+    if(SH[n].free) continue;
+    const d = SH[n].home.distanceTo(SH[i].home);
+    if(d < bd){ bd=d; best=n; }
+  }
+  return best;
+}
+
+function beginReturn(i){
+  const s=SH[i], a=anchorFor(i);
+  if(a < 0) return false;
+  s.returning = true; s.retT = 0;
+  s.retFrom.copy(s.home).add(s.off);                 // where it is lying now
+  s.retQ.copy(s.quat);
+  // the gold starts at the joint it shares with the piece still standing
+  s.fillO.copy(SH[a].home).lerp(s.home, 0.55);
+  s.fill = 0;
+  // the mid-point of the lift: straight toward its own socket, only a small rise
+  s.retMid.copy(s.retFrom).lerp(s.home, 0.5);
+  s.retMid.y += 0.55 + s.retFrom.distanceTo(s.home)*0.10;
+  sndChime();
+  return true;
+}
+
+
+/* ══════════════════ ACTS ══════════════════
+   0 cube in space → 1 the singularity → 2 the bowl → 3 it becomes a cube again */
+const A_CUBE=0, A_HOLE=1, A_BOWL=2, A_FORM=3;
+let act = A_CUBE, actT = 0, fade = 0;
+
+const BOWL_S = 0.205;
+const bowlGroup = new THREE.Group();
+bowlGroup.scale.setScalar(BOWL_S);
+bowlGroup.position.set(0, -0.36, 0);
+bowlGroup.visible = false;
+scene.add(bowlGroup);
+bowlGroup.add(chips);
+
+// two worlds: one lit by stars, one by a studio
+function studioScene(){
+  const sc = new THREE.Scene();
+  sc.add(new THREE.Mesh(new THREE.SphereGeometry(50,24,16),
+    new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, uniforms:{},
+      vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader:`varying vec3 vP; void main(){
+        float h=normalize(vP).y*0.5+0.5;
+        vec3 c=mix(vec3(0.026,0.027,0.034), vec3(0.155,0.165,0.200), pow(h,1.5));
+        c=mix(c, vec3(0.40,0.34,0.27), pow(max(h-0.55,0.0)*2.2,2.0));
+        gl_FragColor=vec4(c,1.0); }` })));
+  const card=(w,h,col,int,pos,rot)=>{
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+      new THREE.MeshBasicMaterial({ color:new THREE.Color(col).multiplyScalar(int), side:THREE.DoubleSide }));
+    m.position.set(...pos); m.rotation.set(...rot); sc.add(m);
+  };
+  card(34,28,0xfff2e2, 1.05, [-15,12, 9], [0, 0.75,0]);
+  card(34,28,0xffeedc, 0.85, [ -5,17, 3], [-1.15,0,0]);
+  card(24, 7,0xb2c6e0, 0.90, [ 13, 5,-10],[0,-1.00,0]);
+  card(18, 6,0xffd9a8, 1.10, [  0,-1, 9], [0.40,0,0]);
+  card(22,22,0xf0e6da, 0.55, [  0,-3, 0], [1.5708,0,0]);
+  return sc;
+}
+const bowlKey = new THREE.DirectionalLight(0xffe8cc, 0.30);
+bowlKey.position.set(-5.5, 9.5, 6.0);
+bowlKey.visible = false;
+scene.add(bowlKey);
+const bowlFill = new THREE.HemisphereLight(0x33405a, 0x342c26, 1.05);
+bowlFill.visible = false;
+scene.add(bowlFill);
+
+let mendedCount = 0, autoT = 0, everBroke = false, wholeT = 0, idleT = 0;
+const _invQ = new THREE.Quaternion();
+let bowlDrop = 0;                // 0 → 1 as it falls in and rights itself
+let bowlWob  = 0;                // the wobble it settles out of
+let formT    = 0;                // the fold back into a cube
+
+function enterAct(next){
+  act = next; actT = 0;
+  if(next === A_CUBE){
+    sky.visible = true; scene.environment = starEnv;
+    cube.visible = true; rim.visible = true;
+    bowlGroup.visible = false; bowlKey.visible = false; bowlFill.visible = false;
+    strain = 0; burst = 0; eat = 0; broken = false; camD = D_CUBE;
+    cube.scale.setScalar(0.001); formT = 0;
+    hintEl.textContent = 'press and hold the cube';
+  }
+  if(next === A_HOLE){ hintEl.textContent = 'drag to orbit it'; }
+  if(next === A_BOWL){
+    sky.visible = false; scene.environment = studioEnv;
+    cube.visible = false; rim.visible = false;
+    bowlGroup.visible = true; bowlKey.visible = true; bowlFill.visible = true;
+    // the space act has to be fully switched off or its pass keeps painting over
+    broken = false; burst = 0; eat = 0; strain = 0; flash = 0; mendedCount = 0;
+    singularity.uniforms.uAmt.value = 0;
+    mountVessel((Math.random()*1e9)|0);
+    bowlDrop = 0; bowlWob = 1; camD = D_BOWL;
+    everBroke = false; wholeT = 0; idleT = 0; autoT = 0;
+    az = 0.55; el = 0.50; azV = 0; elV = 0;
+    hintEl.textContent = 'tap it · tap again to break it';
+  }
+  if(next === A_FORM){ formT = 0; hintEl.textContent = 'it is folding itself back'; }
+}
+
+/* ══════════ post ══════════ */
+const _sz=new THREE.Vector2(); renderer.getDrawingBufferSize(_sz);
+const _rt=new THREE.WebGLRenderTarget(Math.max(_sz.x,2),Math.max(_sz.y,2),
+  { type:THREE.HalfFloatType, samples:4, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter });
+const composer = new EffectComposer(renderer,_rt);
+composer.addPass(new RenderPass(scene,camera));
+/* ── the singularity ──────────────────────────────────────────────
+   Photons are integrated through a Schwarzschild field: the ray is bent
+   every step by -1.5·h²·p/|p|⁵. Where a bent ray crosses the equatorial
+   plane inside the disk radius we shade it — hotter inward, and Doppler
+   beamed, so the limb rotating toward you is brighter and bluer. The
+   shards behind get bent by the same deflection. */
+const singularity = new ShaderPass({
+  uniforms:{
+    tDiffuse:{value:null}, uAmt:{value:0}, uT:{value:0},
+    uCam:{value:new THREE.Vector3()}, uInv:{value:new THREE.Matrix4()},
+    uVP:{value:new THREE.Matrix4()}, uAspect:{value:4/3}, uFov:{value:0.268}
+  },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader: SKY + `
+    uniform sampler2D tDiffuse;
+    uniform float uAmt, uT, uAspect, uFov;
+    uniform vec3 uCam; uniform mat4 uInv, uVP;
+    varying vec2 vUv;
+
+    // the geodesic form below is written for r_s = 2, so the camera is lifted
+    // into those units rather than the hole being scaled to the scene
+    #define RS 2.0
+    #define DI 4.6
+    #define DO 11.5
+    #define KSC 5.3
+
+    vec3 diskShade(vec3 hit, vec3 dir){
+      float rr  = length(hit.xz);
+      float ang = atan(hit.z, hit.x);
+      vec3  orb = normalize(vec3(-hit.z, 0.0, hit.x)) / sqrt(max(rr,0.2));
+      // beaming: the side coming at you is brighter, and pushed blue
+      float dop = clamp(1.0/(1.0 - dot(orb, normalize(dir))*1.35), 0.18, 3.4);
+      float tp  = pow(DI/max(rr,0.01), 0.85);
+      vec3  base = mix(vec3(1.00,0.30,0.05), vec3(1.00,0.72,0.34), smoothstep(0.18,0.62,tp));
+      base = mix(base, vec3(1.00,0.96,0.90), smoothstep(0.62,1.05,tp));
+      base = mix(base, base*vec3(0.85,0.95,1.25), smoothstep(1.3,3.0,dop));  // blueshift
+      // Keplerian shear: the inner material laps the outer, so the bands wind up
+      float shear = uT*0.62/pow(max(rr,0.5),1.5);
+      vec2  sw = vec2(cos(ang+shear), sin(ang+shear));
+      float bands = 0.34 + 0.98*fbm3(vec3(sw*rr*0.85, rr*0.55));
+      bands *= 0.46 + 0.92*fbm3(vec3(sw*rr*3.1, 3.0 + rr*0.3));
+      bands *= 0.62 + 0.62*fbm3(vec3(sw*rr*8.5, 11.0));
+
+      // dust lanes: dark absorbing streaks wound into the flow by the shear
+      float lane  = fbm3(vec3(sw*rr*1.55, shear*0.35 + 4.0));
+      bands *= 0.22 + 1.05*smoothstep(0.30, 0.66, lane);
+
+      // debris: sparse bright clumps riding the orbit
+      float kn    = fbm3(vec3(sw*rr*5.2, 7.0 - shear*0.2));
+      bands += pow(smoothstep(0.585, 0.88, kn), 3.0) * 3.1;
+
+      // grit, so the surface never reads smooth
+      bands *= 0.66 + 0.62*fbm3(vec3(sw*rr*23.0, 31.0));
+      bands *= 0.80 + 0.40*fbm3(vec3(sw*rr*48.0, 57.0));
+
+      // the plunging stream, where the gas gives up and falls
+      bands += smoothstep(DI*1.10, DI, rr) * (0.35 + 0.75*fbm3(vec3(sw*rr*6.0, uT*0.8)));
+      float env = smoothstep(DI, DI*1.16, rr) * (1.0 - smoothstep(DO*0.50, DO, rr));
+      // the inner edge runs hot and smooth where the gas is about to fall
+      float lip = smoothstep(DI*1.30, DI*1.02, rr) * 1.9;
+      return base * (bands + lip) * env * pow(dop, 2.2) * 0.80;
+    }
+
+    void main(){
+      vec3 src = texture2D(tDiffuse, vUv).rgb;
+      if(uAmt < 0.006){ gl_FragColor = vec4(src,1.0); return; }
+
+      vec2 ndc = vUv*2.0-1.0;
+      vec3 rd = normalize((uInv * vec4(ndc.x*uAspect*uFov, ndc.y*uFov, -1.0, 0.0)).xyz);
+      vec3 p = uCam*KSC, v = rd;
+      vec3 cr = cross(p, v);
+      float h2 = dot(cr, cr);
+
+      vec3 disk = vec3(0.0);
+      float acc = 0.0;
+      bool eaten = false;
+
+      for(int i=0;i<300;i++){
+        float r = length(p);
+        if(r < RS){ eaten = true; break; }
+        if(r > 170.0 && dot(p, v) > 0.0) break;
+        float dt = clamp(r*0.042, 0.045, 4.0);
+        vec3 pp = p;
+        p += v*dt;
+        v += (-1.5*h2*p/pow(dot(p,p), 2.5))*dt;
+        if(pp.y*p.y < 0.0 && acc < 0.97){
+          float f = pp.y/(pp.y - p.y);
+          vec3 hit = mix(pp, p, f);
+          float rr = length(hit.xz);
+          if(rr > DI && rr < DO){
+            vec3 c = diskShade(hit, v);
+            float a = clamp(dot(c, vec3(0.5)), 0.0, 1.0);
+            disk += c * (1.0 - acc);
+            acc  += a * (1.0 - acc);
+          }
+        }
+      }
+
+      vec3 bent;
+      if(eaten){
+        bent = vec3(0.0);
+      } else {
+        // the scene, pulled along the same deflection the photons took
+        vec3 far = uCam + normalize(v)*38.0;
+        vec4 clip = uVP * vec4(far, 1.0);
+        vec2 suv = clip.xy/max(clip.w, 1e-4)*0.5 + 0.5;
+        float inside = step(0.0,suv.x)*step(suv.x,1.0)*step(0.0,suv.y)*step(suv.y,1.0);
+        vec3 lensed = texture2D(tDiffuse, clamp(suv, 0.002, 0.998)).rgb;
+        bent = mix(starField(v), lensed*0.40, inside*0.88);
+      }
+
+      vec3 outc = bent + disk;
+      // light that orbited the hole before escaping stacks into a thin bright ring
+      float b = length(cross(uCam*KSC, rd));
+      float ring = exp(-pow((b - RS*2.60)/(RS*0.085), 2.0));
+      outc += vec3(1.0,0.90,0.76) * ring * 0.42;
+      // the photon ring: the last stable orbit piles light into a thin circle
+      float rimr = abs(length(vUv - 0.5) * 2.0 * (uAspect) - 0.0);
+      gl_FragColor = vec4(mix(src, outc, uAmt), 1.0);
+    }`
+});
+composer.addPass(singularity);
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 0.52, 0.50, 0.72);
+composer.addPass(bloom);
+const finalPass = new ShaderPass({
+  uniforms:{ tDiffuse:{value:null}, uT:{value:0}, uFlash:{value:0}, uFade:{value:0} },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform float uT, uFlash, uFade; varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      vec2 d=vUv-0.5; float r2=dot(d,d);
+      float ca=(0.0018 + uFlash*0.012)*r2*4.0;
+      vec3 c;
+      c.r=texture2D(tDiffuse,vUv+d*ca).r;
+      c.g=texture2D(tDiffuse,vUv).g;
+      c.b=texture2D(tDiffuse,vUv-d*ca).b;
+      c += vec3(0.55,0.78,1.0) * uFlash * 0.22 * (1.0-smoothstep(0.0,0.5,r2));
+      c *= smoothstep(1.02,0.10,r2*1.5);
+      float g=hash(vUv*vec2(1920.0,1080.0)+uT*37.0)-0.5;
+      c += g*0.015*(1.0-0.6*smoothstep(0.0,0.5,dot(c,vec3(0.33))));
+      c *= (1.0 - uFade);
+      gl_FragColor=vec4(pow(max(c,0.0),vec3(0.985)),1.0);
+    }`
+});
+finalPass.renderToScreen = true;
+composer.addPass(finalPass);
+
+/* ══════════ orbit ══════════ */
+let az=0.6, el=0.22, azV=0, elV=0, drift=0;
+const D_CUBE=8.4, D_HOLE=8.8, D_BOWL=6.3;
+let camD=D_CUBE;
+function placeCamera(){
+  const a=az+drift, ce=Math.cos(el), se=Math.sin(el);
+  camera.position.set(Math.sin(a)*camD*ce, se*camD*ce, Math.cos(a)*camD*ce);
+  camera.position.y = se*camD;
+  camera.lookAt(CENTER);
+}
+
+/* ══════════ state ══════════ */
+let strain=0, burst=0, broken=false, holding=false, flash=0, spin=0, eat=0;
+const hitPoint = new THREE.Vector3(0,0,1);
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2(-2,-2);
+let down=false, moveDist=0, lastX=0, lastY=0;
+let hasPtr=false, hasHit=false, hitCell=-1;
+
+// the bowl's picker: one invisible sphere per shard, kept out of the scene graph
+function pick(){
+  hasHit=false;
+  if(!vessel) return false;
+  for(let i=0;i<CELLS;i++){
+    const sh=SH[i];
+    _kv3.copy(sh.home).add(sh.off);
+    _ks3.setScalar(Math.max(sh.rad*0.62, 0.42));
+    _km4.compose(_kv3, sh.quat, _ks3);
+    picker.setMatrixAt(i,_km4);
+  }
+  picker.instanceMatrix.needsUpdate=true;
+  picker.updateMatrixWorld(true);
+  ray.setFromCamera(ptr,camera);
+  const hits=ray.intersectObject(picker,false);
+  if(hits.length){ hasHit=true; hitCell=hits[0].instanceId; hitPoint.copy(hits[0].point); }
+  return hasHit;
+}
+
+function setHint(){
+  if(act === A_FORM) return;
+  if(act === A_BOWL){
+    hintEl.textContent = mendedCount >= 12 ? 'nearly whole — it wants to be a cube again'
+                       : mendedCount > 3   ? 'hover the pieces · gold carries them home'
+                       : 'tap it · tap again to break it';
+    return;
+  }
+  if(broken)          hintEl.textContent = 'drag to orbit it · over the top, under the disk';
+  else if(strain>0.6) hintEl.textContent = 'it is about to go';
+  else if(strain>0.1) hintEl.textContent = 'keep holding';
+  else                hintEl.textContent = 'press and hold the cube';
+}
+
+function ndc(e){
+  const r=canvas.getBoundingClientRect();
+  ptr.x=((e.clientX-r.left)/r.width)*2-1;
+  ptr.y=-((e.clientY-r.top)/r.height)*2+1;
+  hasPtr=true;
+}
+canvas.addEventListener('pointerdown',e=>{
+  try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+  ndc(e);
+  down=true; moveDist=0;
+  lastX=e.clientX; lastY=e.clientY;
+  if(act === A_CUBE){
+    holding = true;
+    ray.setFromCamera(ptr, camera);
+    const hits = ray.intersectObject(cube, false);
+    if(hits.length) hitPoint.copy(cube.worldToLocal(hits[0].point.clone()));
+    canvas.classList.add('holding');
+  }
+});
+canvas.addEventListener('pointermove',e=>{
+  ndc(e);
+  if(down && e.buttons===0){ down=false; holding=false; canvas.classList.remove('holding'); }
+  if(!down) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  moveDist += Math.abs(dx)+Math.abs(dy);
+  if(moveDist > 8){ holding=false; }        // a drag is a turn, not a press
+  azV -= dx*0.0042; elV += dy*0.0030;
+});
+addEventListener('pointerup',()=>{
+  canvas.classList.remove('holding');
+  if(down && moveDist < 9 && act === A_BOWL && bowlDrop >= 0.9 && hasHit){
+    strike(hitPoint, 0.55);
+  }
+  down=false; holding=false;
+});
+addEventListener('pointercancel',()=>{ down=false; holding=false; });
+canvas.addEventListener('pointerleave',()=>{ hasPtr=false; });
+document.getElementById('reset').addEventListener('click',()=>{ fade = 0; enterAct(A_CUBE); });
+
+/* ══════════ loop ══════════ */
+const clock=new THREE.Clock();
+let t=0, visible=true;
+function resize(){
+  const r=canvas.getBoundingClientRect();
+  const dpr=Math.min(devicePixelRatio||1, 1.8);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(r.width,r.height,false);
+  composer.setPixelRatio(dpr); composer.setSize(r.width,r.height);
+  bloom.setSize(r.width*dpr,r.height*dpr);
+  camera.aspect=r.width/r.height; camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize);
+new ResizeObserver(resize).observe(canvas);
+resize();
+new IntersectionObserver(es=>{ visible=es[0].isIntersecting; },{threshold:0.01}).observe(canvas);
+
+function tick(){
+  requestAnimationFrame(tick);
+  if(!visible){ clock.getDelta(); return; }
+  const dt=Math.min(clock.getDelta(),0.04);
+  t+=dt;
+
+  az+=azV; el=Math.max(-1.42, Math.min(1.42, el+elV));   // over the top, under the bottom
+  azV*=Math.pow(0.003,dt); elV*=Math.pow(0.003,dt);
+  if(!reduced && !down) drift += dt*0.06;
+  const inSpace = (act === A_CUBE || act === A_HOLE);
+  spin += dt*0.16*(1.0 - burst*0.8);
+
+  cube.rotation.y = spin; cube.rotation.x = Math.sin(spin*0.55)*0.12;
+  rim.rotation.copy(cube.rotation);
+  placeCamera();
+
+  actT += dt;
+
+  if(act === A_CUBE){
+    cube.scale.setScalar(Math.min(1, cube.scale.x + dt*1.6));
+  }
+  if(act === A_HOLE && eat > 0.965 && actT > 13.0){
+    fade = Math.min(1, fade + dt*0.55);
+    if(fade >= 1){ enterAct(A_BOWL); }
+  } else if(act !== A_FORM){
+    fade = Math.max(0, fade - dt*0.9);
+  }
+
+  if(act === A_BOWL){
+    // left alone it starts mending itself — that is the whole point of kintsugi
+    autoT += dt;
+    if(bowlDrop >= 1 && autoT > 0.72){
+      autoT = 0;
+      let best=-1, bd=1e9, fb=-1, fbd=1e9;
+      for(let i=0;i<CELLS;i++){
+        const sh=SH[i];
+        if(!sh.free || sh.returning || !sh.resting) continue;
+        const d = sh.home.y;                       // rebuild from the foot upward
+        if(anchorFor(i) >= 0){ if(d < bd){ bd=d; best=i; } }
+        else if(d < fbd){ fbd=d; fb=i; }
+      }
+      // if nothing still touches the body, start again from the lowest piece
+      if(best < 0) best = fb;
+      if(best >= 0){
+        const sh = SH[best];
+        sh.gild = Math.max(sh.gild, 0.62);
+        if(!beginReturn(best)){
+          sh.returning = true; sh.retT = 0;
+          sh.retFrom.copy(sh.home).add(sh.off); sh.retQ.copy(sh.quat);
+          sh.fillO.copy(sh.home); sh.fill = 0;
+          sh.retMid.copy(sh.retFrom).lerp(sh.home, 0.5);
+          sh.retMid.y += 0.55 + sh.retFrom.distanceTo(sh.home)*0.10;
+        }
+      }
+    }
+    bowlDrop = Math.min(1, bowlDrop + dt*0.75);
+    const e = ease(bowlDrop);
+    bowlWob = Math.max(0, 1 - bowlDrop*1.25);
+    bowlGroup.position.y = -0.36 + (1 - e)*1.9;
+    const w = bowlWob * Math.sin(actT*7.4) * 0.30;
+    bowlGroup.rotation.z = w;
+    bowlGroup.rotation.x = bowlWob * Math.cos(actT*6.1) * 0.24;
+    bowlGroup.rotation.y += dt*0.10;
+    // count the real state every frame instead of trusting a counter
+    let nLoose = 0, nRet = 0, nMend = 0;
+    for(let i=0;i<CELLS;i++){
+      const sh = SH[i];
+      if(sh.free && !sh.returning) nLoose++;
+      if(sh.returning) nRet++;
+      if(sh.gild > 0.5) nMend++;
+      if(sh.free) everBroke = true;
+    }
+    mendedCount = nMend;
+
+    if(bowlDrop >= 1){
+      idleT += dt;
+      // if nobody touches it, it cracks on its own — the loop has to keep running
+      if(!everBroke && idleT > 7.5){
+        strike(new THREE.Vector3(-1.9 + Math.random()*3.8, 2.2 + Math.random()*0.9,
+                                 -1.6 + Math.random()*3.2), 0.85);
+        idleT = 0;
+      }
+      // everything that fell has been put back → it is whole again
+      if(everBroke && nLoose === 0 && nRet === 0){ wholeT += dt; } else { wholeT = 0; }
+      if(wholeT > 1.4 || actT > 62){ enterAct(A_FORM); }
+    }
+  }
+
+  if(act === A_FORM){
+    formT = Math.min(1, formT + dt*0.36);
+    const f = formT;
+
+    // 0 → .42  the tremor: it shakes harder and harder, gold running white
+    if(f < 0.46){
+      const q = f/0.46;
+      const amp = q*q*0.085;
+      bowlGroup.position.x = (Math.random()-0.5)*amp*2.0;
+      bowlGroup.position.z = (Math.random()-0.5)*amp*2.0;
+      bowlGroup.position.y = -0.36 + (Math.random()-0.5)*amp;
+      bowlGroup.rotation.z = (Math.random()-0.5)*amp*1.6;
+      bowlGroup.rotation.x = (Math.random()-0.5)*amp*1.6;
+      bowlGroup.rotation.y += dt*(0.4 + q*7.0);
+      for(let i=0;i<CELLS;i++){ SH[i].heat = Math.max(SH[i].heat, q*0.9); }
+    }
+    // .42 → .72  it collapses into itself
+    if(f >= 0.42){
+      const q = Math.min(1, (f-0.42)/0.30);
+      const e = ease(q);
+      bowlGroup.position.set(0,-0.36,0);
+      bowlGroup.scale.setScalar(BOWL_S*(1-e));
+      bowlGroup.rotation.y += dt*(7.0 + 26.0*e);
+      for(let i=0;i<CELLS;i++){
+        const sh=SH[i];
+        sh.off.multiplyScalar(1 - Math.min(0.9, dt*5.0));
+        sh.heat = Math.max(sh.heat, 1-e*0.6);
+      }
+      pushState();
+    }
+    // .62 → .88  a cube comes out of it
+    if(f >= 0.62){
+      const q = Math.min(1, (f-0.62)/0.22);
+      cube.scale.setScalar(ease(q));
+      cube.rotation.y = spin + (1-q)*5.0;
+      flash = Math.max(flash, (1-Math.abs(q-0.25)*4.0)*0.9);
+    }
+    // .86 → 1   and throws itself back out into the stars
+    if(f >= 0.86){
+      const q = (f-0.86)/0.14;
+      camD = D_BOWL + q*q*34.0;
+      fade = Math.max(0, (q-0.72)/0.28);
+    }
+    if(formT >= 1){
+      bowlGroup.scale.setScalar(BOWL_S);
+      bowlGroup.rotation.set(0,0,0);
+      bowlGroup.position.set(0,-0.36,0);
+      enterAct(A_CUBE);
+    }
+  }
+
+  // strain: the one number the whole piece runs on
+  // once the glass goes it stays gone — you need both hands free to look around
+  if(act === A_CUBE || act === A_HOLE){
+    if(!broken){
+      if(holding) { strain = Math.min(1, strain + dt*0.42);
+                    if(strain >= 1){ broken = true; flash = 1; enterAct(A_HOLE); } }
+      else        { strain = Math.max(0, strain - dt*0.55); }
+    }
+  }
+  if(!(act===A_FORM && formT>=0.86)){
+    const camWant = (act===A_BOWL||act===A_FORM) ? D_BOWL : (broken ? D_HOLE : D_CUBE);
+    camD += (camWant - camD) * Math.min(1, dt*(broken ? 0.85 : 1.5));
+  }
+  const bTarget = (broken && (act===A_CUBE||act===A_HOLE)) ? 1 : 0;
+  burst += (bTarget - burst) * Math.min(1, dt*(broken ? 9.0 : 3.4));
+  flash = Math.max(0, flash - dt*2.2);
+  eat += (((broken&&(act===A_CUBE||act===A_HOLE)) ? 1 : 0) - eat) * Math.min(1, dt*(broken ? 0.30 : 2.6));
+
+  // 4D rotation — faster the harder it is pressed, unbound once the glass gives
+
+  const sing = THREE.MathUtils.smoothstep(burst, 0.32, 0.92);
+  singularity.uniforms.uAmt.value   = sing;
+  singularity.uniforms.uT.value     = t;
+  singularity.uniforms.uCam.value.copy(camera.position);
+  singularity.uniforms.uAspect.value = camera.aspect;
+  singularity.uniforms.uFov.value    = Math.tan(THREE.MathUtils.degToRad(camera.fov)*0.5);
+  singularity.uniforms.uInv.value.makeRotationFromQuaternion(camera.quaternion);
+  singularity.uniforms.uVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+
+  construct.visible = inSpace && burst > 0.01;
+  if(construct.visible){
+    for(const m of construct.children){
+      const i = m.userData.i;
+      m.material.opacity = burst * (0.34 - i*0.033) * (0.6 + 0.4*Math.sin(t*0.7 + i));
+      m.rotation.y = t*0.05*(1 + i*0.13);
+      m.rotation.x = Math.sin(t*0.09 + i)*0.05;
+    }
+  }
+  rim.visible   = inSpace && burst < 0.985;
+  cube.visible  = inSpace || (act === A_FORM && formT >= 0.62);
+  rimMat.opacity = 1;
+  rimMat.color.setRGB(0.62 + strain*0.9, 0.78 + strain*0.5, 0.94);
+
+  uni.uEat.value = eat;
+  uni.uStrain.value = strain;
+  uni.uBurst.value  = burst;
+  uni.uT.value      = t;
+  uni.uHit.value.copy(hitPoint);
+  cageMat.opacity   = 0.10 + burst*0.30;
+  finalPass.uniforms.uFlash.value = flash;
+  finalPass.uniforms.uFade.value  = fade;
+  finalPass.uniforms.uT.value = t;
+
+
+  /* ── the bowl, when we are in its act ── */
+  if(act === A_BOWL || act === A_FORM){
+    hasHit = false;
+    if(hasPtr && vessel){
+      picker.scale.setScalar(BOWL_S);
+      picker.position.copy(bowlGroup.position);
+      picker.quaternion.copy(bowlGroup.quaternion);
+      pick();
+      if(hasHit){
+        hitPoint.sub(bowlGroup.position).applyQuaternion(_invQ.copy(bowlGroup.quaternion).invert()).divideScalar(BOWL_S);
+      }
+    }
+  let loose=0, mended=0, cracked=0;
+  for(let i=0;i<CELLS;i++){
+    const s=SH[i];
+
+    if(s.returning){
+      s.retT = Math.min(1, s.retT + dt/1.9);
+      // 0 → .55  the piece is lifted and set back into its own socket
+      const a=Math.min(1, s.retT/0.55);
+      const e=a<0.5 ? 2*a*a : 1-Math.pow(-2*a+2,2)/2;
+      const k=1-e;
+      _ktmp.set(
+        k*k*s.retFrom.x + 2*k*e*s.retMid.x + e*e*s.home.x,
+        k*k*s.retFrom.y + 2*k*e*s.retMid.y + e*e*s.home.y,
+        k*k*s.retFrom.z + 2*k*e*s.retMid.z + e*e*s.home.z);
+      s.off.copy(_ktmp).sub(s.home);
+      s.quat.copy(s.retQ).slerp(IDENT, e);
+      // .45 → 1   the joint fills: molten bead runs along the crack, then cools
+      s.fill = clamp((s.retT-0.45)/0.52, 0, 1);
+      if(s.retT>=1){
+        s.returning=false; s.free=false; s.resting=true; s.settling=false;
+        s.off.set(0,0,0); s.quat.identity(); s.vel.set(0,0,0); s.angVel.set(0,0,0);
+        s.gild=Math.max(s.gild,1); s.fill=1;
+      }
+    }
+    else if(s.free && !s.resting){
+      s.freeT += dt;
+      if(!s.settling){
+        s.vel.y += GRAV*dt;
+        s.vel.multiplyScalar(Math.pow(0.86,dt));
+        s.off.addScaledVector(s.vel,dt);
+        const om=s.angVel.length();
+        if(om>1e-4){ _kq.setFromAxisAngle(_ktmp.copy(s.angVel).normalize(), om*dt); s.quat.premultiply(_kq); }
+        if(s.freeT>0.85 || (s.home.y+s.off.y) < FLOOR+0.9){
+          s.settling=true; s.setT=0; s.fromOff.copy(s.off); s.fromQ.copy(s.quat);
+        }
+      } else {
+        s.setT=Math.min(1, s.setT + dt/0.75);
+        const e=ease(s.setT);
+        s.off.lerpVectors(s.fromOff, s.restOff, e);
+        s.off.y += Math.sin(Math.PI*s.setT)*0.5;
+        s.quat.copy(s.fromQ).slerp(s.restQ, e);
+        if(s.setT>=1){ s.resting=true; s.settling=false; s.vel.set(0,0,0); s.angVel.set(0,0,0); sndLand(); }
+      }
+    }
+
+    /* hover: stress builds from handling, and gold reaches for landed pieces */
+    if(hasHit && !down && !s.returning){
+      const d=_kv3.copy(s.home).add(s.off).distanceTo(hitPoint);
+      const w=Math.max(0, 1 - d/2.2);
+      if(w>0){
+        if(!s.free && s.stress < 0.99){                 // circling it too long wears it
+          s.stress = Math.min(0.99, s.stress + dt*0.045*w*w);
+          if(s.stress >= 0.40 && s.brkT < 0.5){ s.brkT=0.55; sndCrack(0.2); }
+        }
+        if(s.brk>0.1 && (!s.free || s.resting)){
+          if(s.gild < 0.02 && s.fill < 0.02){
+            s.fillO.copy(hitPoint).sub(s.off);        // it starts where you touched it
+          }
+          s.gild=Math.min(1, s.gild + dt*1.6*w*w);
+          if(!s.free) s.fill=Math.min(1, s.fill + dt*0.85*w);
+          s.heat=Math.min(1, s.heat + dt*3.2*w);
+          if(s.free && s.gild>0.5) beginReturn(i);
+        }
+      }
+    }
+
+    s.brk += (s.brkT - s.brk)*Math.min(1, dt*8.0);
+    s.heat *= Math.exp(-dt*1.2);
+    if(s.free && !s.returning) loose++;
+    if(s.gild>0.5) mended++;
+    if(!s.free && s.brk>0.2 && s.gild<=0.5) cracked++;
+  }
+  pushState();
+
+  /* chips */
+  if(chips.count){
+    for(let i=0;i<chips.count;i++){
+      const c=chipState[i];
+      if(!c.live) continue;
+      if(!c.rest){
+        c.v.y += GRAV*dt;
+        c.p.addScaledVector(c.v,dt);
+        const om=c.av.length();
+        if(om>1e-4){ _kq.setFromAxisAngle(_ktmp.copy(c.av).normalize(), om*dt); c.q.premultiply(_kq); }
+        const crh=Math.hypot(c.p.x,c.p.z)||1e-4;
+        if(crh<5.6){ c.v.x += (c.p.x/crh)*9.0*dt; c.v.z += (c.p.z/crh)*9.0*dt; }
+        if(c.p.y < FLOOR+0.05){
+          c.p.y=FLOOR+0.05; c.v.y=Math.abs(c.v.y)*0.3;
+          c.v.x*=0.7; c.v.z*=0.7; c.av.multiplyScalar(0.5);
+          if(c.v.lengthSq()<0.25){ c.rest=true; c.v.set(0,0,0); c.av.set(0,0,0); }
+        }
+      }
+      _km4.compose(c.p, c.q, _ks3.setScalar(c.s));
+      chips.setMatrixAt(i,_km4);
+    }
+    chips.instanceMatrix.needsUpdate=true;
+  }
+
+
+  }
+
+  composer.render();
+
+  gFill.style.width = Math.round((broken ? 1 : strain)*100) + '%';
+  gEl.classList.toggle('hot', strain > 0.6 || broken);
+  statEl.innerHTML = broken
+    ? `<i>containment failed</i> · orbit it`
+    : `strain <em>${Math.round(strain*100)}%</em>`;
+  setHint();
+}
+tick();
+
+canvas.addEventListener('webglcontextlost',e=>{ e.preventDefault(); });
+</script>
+</body>
+</html>

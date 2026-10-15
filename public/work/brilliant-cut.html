@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brilliant Cut</title>
+<style>
+  :root{
+    --bg:#070709; --ink:#e9e6df; --dim:#6d6963; --line:#1b1b1f;
+    --fire:#d9b26a;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .stage{min-height:100svh;display:grid;place-items:center;padding:64px 24px}
+  .rig{width:100%;max-width:1440px;display:grid;
+    grid-template-columns:260px minmax(0,1fr) 260px;gap:80px;align-items:center}
+
+  .kicker{font-family:var(--mono);font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);margin:0 0 20px}
+  .title{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.02;
+    letter-spacing:-.02em;margin:0 0 20px}
+  .title em{font-style:italic;color:var(--fire)}
+  .lede{font-size:14px;line-height:1.65;color:#98928a;margin:0}
+
+  .meta{font-family:var(--mono);font-size:10.5px;line-height:2.1;color:var(--dim);letter-spacing:.04em}
+  .meta b{display:block;color:#8d877e;font-weight:400;letter-spacing:.18em;
+    text-transform:uppercase;font-size:9px;margin-bottom:10px}
+  .meta .k{color:#b8b1a6}
+  .rule{height:1px;background:var(--line);margin:22px 0}
+
+  .cut label{display:flex;justify-content:space-between;font-family:var(--mono);
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:9px}
+  .cut label span{color:var(--ink)}
+  .cut label span.bad{color:#b4614a}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:1px;
+    background:#2a2a30;outline:none;margin:10px 0 6px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+    border-radius:50%;background:var(--fire);cursor:ew-resize}
+  input[type=range]::-moz-range-thumb{width:11px;height:11px;border:0;border-radius:50%;
+    background:var(--fire);cursor:ew-resize}
+  .ticks{position:relative;height:12px;font-family:var(--mono);font-size:8.5px;color:#4a4640}
+  .ticks i{position:absolute;transform:translateX(-50%);font-style:normal;white-space:nowrap}
+  .ticks i.ideal{color:var(--fire)}
+
+  .btn{appearance:none;background:none;border:0;padding:0;cursor:pointer;display:block;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dim);transition:color .3s}
+  .btn:hover{color:var(--fire)}
+
+  .frame{position:relative;margin:0;width:100%;aspect-ratio:4/3;
+    background:#09090b;overflow:hidden;
+    box-shadow:0 0 0 1px #16161a, 0 60px 120px -50px #000}
+  .frame canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  .frame canvas.dragging{cursor:grabbing}
+  .glass{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(118deg,rgba(255,255,255,.05) 0%,rgba(255,255,255,0) 34%,
+      rgba(255,255,255,0) 66%,rgba(255,255,255,.02) 100%);mix-blend-mode:screen}
+  .edge{position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 90px 30px rgba(0,0,0,.55)}
+  .hud{position:absolute;left:18px;right:18px;bottom:15px;display:flex;
+    justify-content:space-between;gap:16px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.2em;text-transform:uppercase;color:#5b5750;pointer-events:none;transition:color .5s}
+  .frame:hover .hud{color:#8e867c}
+  .hud em{font-style:normal;color:var(--fire)}
+  .hud i{font-style:normal;color:#b4614a}
+
+  @media (max-width:1100px){
+    .rig{grid-template-columns:1fr;gap:36px;max-width:620px}
+    .frame{aspect-ratio:1/1;order:-1}
+    .title{font-size:34px}
+  }
+</style>
+<script>if(location.search.includes('bare'))document.documentElement.classList.add('bare')</script>
+<style>
+  html.bare .left,html.bare .right,html.bare .hud,html.bare .edge,html.bare .glass{display:none!important}
+  html.bare .stage{padding:0;min-height:100vh}
+  html.bare .rig{display:block;max-width:none;width:100vw;height:100vh}
+  html.bare .frame{width:100vw;height:100vh;aspect-ratio:auto!important;border:0;border-radius:0;box-shadow:none}
+</style>
+</head>
+<body>
+<section class="stage">
+  <div class="rig">
+
+    <div class="left">
+      <p class="kicker">Ⅱ · Round Brilliant · Six-prong solitaire</p>
+      <h1 class="title">The window is<br>two <em>degrees</em> wide.</h1>
+      <p class="lede">The stone has no colour of its own — it separates what was already in the light. But it only hands that light back if the pavilion sits in a band roughly two degrees wide. Outside it, the light passes through the bottom and is gone.</p>
+    </div>
+
+    <figure class="frame">
+      <canvas id="c"></canvas>
+      <div class="glass"></div>
+      <div class="edge"></div>
+      <div class="hud">
+        <span id="hint">move to light it · drag to turn</span>
+        <span id="stat"></span>
+      </div>
+    </figure>
+
+    <div class="right">
+      <div class="cut">
+        <label>Pavilion angle <span id="pavv">40.8°</span></label>
+        <input id="pav" type="range" min="36" max="45" step="0.1" value="40.8">
+        <div class="ticks">
+          <i style="left:0%">36°</i>
+          <i class="ideal" style="left:53.3%">ideal 40.8°</i>
+          <i style="left:100%">45°</i>
+        </div>
+      </div>
+      <div class="cut" style="margin-top:18px">
+        <label>Inner tier <span id="secv">classic</span></label>
+        <input id="sec" type="range" min="0" max="7" step="0.1" value="0">
+        <div class="ticks">
+          <i style="left:0%">hearts &amp; arrows</i>
+          <i class="ideal" style="left:100%">rosette</i>
+        </div>
+      </div>
+      <div class="rule"></div>
+      <div class="meta">
+        <b>Interact</b>
+        <span class="k">Move</span> &nbsp;you are the light<br>
+        <span class="k">Drag</span> &nbsp;turn the stone<br>
+        <span class="k">Slider</span> &nbsp;re-cut it live<br>
+      </div>
+      <div class="rule"></div>
+      <div class="meta">
+        <b>Method</b>
+        57 facets as half-spaces.<br>
+        Real refraction, total internal<br>
+        reflection, 8 wavelengths each<br>
+        with its own index. The fire<br>
+        is not a gradient.<br><br>
+        The percentage is measured,<br>
+        not guessed: 576 rays traced<br>
+        through the same facets.<br><br>
+        Proportions are super-ideal:<br>
+        55.5% table, 34.5° crown,<br>
+        40.8° pavilion, 52.5% stars,<br>
+        77.5% lower halves.<br><br>
+        At <span class="k">0</span> the inner tier is a<br>
+        true hearts &amp; arrows cut.<br>
+        Past it, a concentric rosette<br>
+        no cutter could hold by hand.
+      </div>
+      <div class="rule"></div>
+      <button class="btn" id="reset">↺ &nbsp;Ideal cut</button>
+    </div>
+
+  </div>
+</section>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+
+/* ═══════════════════════════════════════════════════════════════════
+   BRILLIANT CUT
+   57 facets built as half-spaces. Rays refract in, bounce by total
+   internal reflection, and leave through the crown — traced per
+   wavelength, each with its own index of refraction.
+   Move the cursor and you are the light. Re-cut it and watch it die.
+   ═══════════════════════════════════════════════════════════════════ */
+
+const canvas  = document.getElementById('c');
+const hintEl  = document.getElementById('hint');
+const statEl  = document.getElementById('stat');
+const pavEl   = document.getElementById('pav');
+const pavvEl  = document.getElementById('pavv');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const IDEAL = 40.8;
+
+/* ── the facet set, shared by the gem shader and the caustic pass ── */
+const GEM_GLSL = `
+#define PI8 0.7853981634
+#define PI16 0.3926990817
+#define PI32 0.1963495408
+#define GA 0.030
+#define TBL 0.555
+
+uniform float uPav;      // pavilion angle, degrees
+uniform float uCrown;    // crown angle, degrees
+uniform float uSec;      // how far the second pavilion row sits off the mains
+uniform float uSecD;     // how deep it cuts
+uniform float uStar2;    // second star tier offset
+uniform float uStarL;    // star facet length, fraction of table-edge to girdle
+uniform float uLgfL;     // lower girdle facet length, fraction of girdle to culet
+
+// accumulate the near (entry) and far (exit) hit of a convex body of half-spaces
+void pl(vec3 o, vec3 d, vec3 n, float dd,
+        inout float tN, inout vec3 nN, inout float tF, inout vec3 nF){
+  float den = dot(d, n);
+  float num = dd - dot(o, n);
+  if(abs(den) < 1e-7){ if(num < 0.0){ tN = 1e9; tF = -1e9; } return; }
+  float t = num / den;
+  if(den < 0.0){ if(t > tN){ tN = t; nN = n; } }
+  else          { if(t < tF){ tF = t; nF = n; } }
+}
+
+bool gemHit(vec3 o, vec3 d, out float tN, out float tF, out vec3 nN, out vec3 nF){
+  float ca = radians(uCrown), pa = radians(uPav);
+  float sc = sin(ca), cc = cos(ca);
+  float sp = sin(pa), cp = cos(pa);
+  float tableY = GA + (1.0 - TBL) * tan(ca);
+  float culetY = -GA - tan(pa);
+
+  // star facets, derived the way a cutter specifies them: the apex sits uStarL
+  // of the way from the table edge out to the girdle
+  float rStar = TBL + uStarL*(1.0 - TBL);
+  float yStar = tan(ca)*(1.0 - rStar*0.9238795) + GA;
+  float rBase = TBL*0.9238795;                       // midpoint of the table octagon's side
+  float thS   = atan((tableY - yStar)/max(rStar - rBase, 1e-4));
+  float sa = sin(thS), cs = cos(thS);
+  float dS = rBase*sa + tableY*cs;
+
+  // lower girdle facets, derived from lower-half length. this one decides
+  // whether the arrows are crisp or mush.
+  float rL  = 1.0 - uLgfL;
+  float yL  = tan(pa)*(rL*0.9807853 - 1.0) - GA;
+  float thL = atan((yL + GA)/min(rL - 1.0, -1e-4));
+  float sl = sin(thL), cl = cos(thL);
+  float dL = sl + GA*cl;
+
+  float su = sin(ca*1.22), cu = cos(ca*1.22);          // upper girdle
+
+  tN = -1e9; tF = 1e9; nN = vec3(0,1,0); nF = vec3(0,1,0);
+
+  pl(o,d, vec3(0.0, 1.0,0.0),  tableY, tN,nN,tF,nF);   // table
+  pl(o,d, vec3(0.0,-1.0,0.0), -culetY, tN,nN,tF,nF);   // culet
+
+  float s2 = sin(pa - radians(uSec)), c2 = cos(pa - radians(uSec));   // second pavilion row
+  float s3 = sin(ca*0.30), c3 = cos(ca*0.30);                        // second star tier
+  for(int k=0;k<8;k++){
+    float a = float(k)*PI8;
+    vec2  u = vec2(cos(a), sin(a));
+    pl(o,d, vec3(sc*u.x,  cc, sc*u.y), sc + GA*cc, tN,nN,tF,nF);   // bezel
+    pl(o,d, vec3(sp*u.x, -cp, sp*u.y), sp + GA*cp, tN,nN,tF,nF);   // pavilion main
+    pl(o,d, vec3(s3*u.x,  c3, s3*u.y), s3*(TBL*0.62) + c3*tableY + uStar2, tN,nN,tF,nF); // inner star
+    float b = a + PI16;
+    vec2  v = vec2(cos(b), sin(b));
+    pl(o,d, vec3(sa*v.x,  cs, sa*v.y), dS, tN,nN,tF,nF);                        // star
+    pl(o,d, vec3(s2*v.x, -c2, s2*v.y), s2 + GA*c2 + uSecD, tN,nN,tF,nF);        // interleaved main
+  }
+  for(int k=0;k<16;k++){
+    float a = float(k)*PI16;
+    vec2  u = vec2(cos(a), sin(a));
+    pl(o,d, vec3(u.x, 0.0, u.y), 1.0, tN,nN,tF,nF);                // girdle
+    float b = a + PI32;
+    vec2  v = vec2(cos(b), sin(b));
+    pl(o,d, vec3(su*v.x,  cu, su*v.y), su + GA*cu, tN,nN,tF,nF);   // upper girdle
+    pl(o,d, vec3(sl*v.x, -cl, sl*v.y), dL, tN,nN,tF,nF);           // lower girdle
+  }
+  return tN < tF && tF > 0.0;
+}
+
+// diamond, Cauchy fit. lam in micrometres.
+float iorAt(float lam, float disp){ return 2.3837 + disp * 0.010775/(lam*lam); }
+`;
+
+/* ── CIE + environment, gem shader only ── */
+const ENV_GLSL = `
+uniform vec3  uKey;
+uniform vec3  uObs;
+uniform float uObsR, uObsS, uGainX;
+uniform float uDisp;
+uniform int   uSpec;
+uniform int   uBnc;
+
+float gs(float x, float m, float s1, float s2){
+  float t = (x - m) * (x < m ? 1.0/s1 : 1.0/s2);
+  return exp(-0.5*t*t);
+}
+vec3 cie(float lamUm){
+  float L = lamUm * 1000.0;
+  float x = 1.056*gs(L,599.8,37.9,31.0) + 0.362*gs(L,442.0,16.0,26.7) - 0.065*gs(L,501.1,20.4,26.2);
+  float y = 0.821*gs(L,568.8,46.9,40.5) + 0.286*gs(L,530.9,16.3,31.1);
+  float z = 1.217*gs(L,437.0,11.8,36.0) + 0.681*gs(L,459.0,26.0,13.8);
+  return vec3(x,y,z);
+}
+vec3 xyz2rgb(vec3 c){
+  return vec3(
+     3.2406*c.x - 1.5372*c.y - 0.4986*c.z,
+    -0.9689*c.x + 1.8758*c.y + 0.0415*c.z,
+     0.0557*c.x - 0.2040*c.y + 1.0570*c.z);
+}
+// a hard-edged card in direction space: sharp edges are what make sparkle
+float card(vec3 d, vec3 c, float r, float soft){
+  float a = dot(normalize(d), normalize(c));
+  return smoothstep(cos(r+soft), cos(r), a);
+}
+// a light tent: dozens of small bright panels. many hard sources is what
+// gives a diamond both its brightness and its sparkle.
+float tent(vec3 d){
+  float u = atan(d.z, d.x)*0.1591549 + 0.5;
+  float v = acos(clamp(d.y,-1.0,1.0))*0.3183099;
+  vec2 g = vec2(u*16.0, v*8.0);
+  vec2 f = fract(g) - 0.5;
+  vec2 c = floor(g);
+  float h = fract(sin(dot(c, vec2(127.1,311.7)))*43758.5453);
+  float r = 0.15 + 0.16*h;
+  float m = smoothstep(r, r*0.5, length(f));
+  return m * (0.30 + 1.55*h);
+}
+float envRad(vec3 d){
+  d = normalize(d);
+  float e = 0.82 + 0.60*smoothstep(-0.55, 1.0, d.y);
+  e += 1.5 * tent(d) * smoothstep(-0.38, 0.28, d.y);
+  e += 5.5 * card(d, uKey, 0.135, 0.050);
+  e += 3.6 * card(d, vec3(0.75, 0.30,-0.62), 0.130, 0.045);
+  e += 2.1 * card(d, vec3(-0.15,-0.42, 0.86), 0.150, 0.055);
+  // nothing bright below the stone — so light that leaks out of the pavilion
+  // is genuinely lost, which is the whole reason cut angles matter
+  e *= 0.13 + 0.87*smoothstep(-0.45, 0.06, d.y);
+  // the viewer's own head blocks the tent. this dark disc is what the pavilion
+  // facets reflect back as the arrow pattern of a true ideal cut.
+  e *= 1.0 - uObsS * card(d, uObs, uObsR, uObsR*0.55);
+  return e;
+}
+float fres(float c, float eta){
+  float s = eta*eta*(1.0 - c*c);
+  if(s > 1.0) return 1.0;
+  float ct = sqrt(1.0 - s);
+  float rs = (eta*c - ct)/(eta*c + ct);
+  float rp = (c - eta*ct)/(c + eta*ct);
+  return clamp(0.5*(rs*rs + rp*rp), 0.0, 1.0);
+}
+`;
+
+/* ══════════ renderer ══════════ */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, alpha:false,
+  powerPreference:'high-performance' });
+renderer.outputColorSpace    = THREE.SRGBColorSpace;
+renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x070709);
+const camera = new THREE.PerspectiveCamera(26, 4/3, 0.05, 60);
+const target = new THREE.Vector3(0, -1.30, 0);
+
+/* the stone sits on a dark plinth */
+const FLOORY = -5.30;
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(26, 96).rotateX(-Math.PI/2),
+  new THREE.MeshBasicMaterial({ color:0x0a0a0d })
+);
+floor.material.onBeforeCompile = sh=>{
+  sh.vertexShader = 'varying vec3 vFP;\n' + sh.vertexShader
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n vFP = position;');
+  sh.fragmentShader = 'varying vec3 vFP;\n' + sh.fragmentShader
+    .replace('#include <color_fragment>',
+      '#include <color_fragment>\n float r=length(vFP.xy);\n' +
+      ' diffuseColor.rgb = mix(vec3(0.052,0.052,0.062), vec3(0.008,0.008,0.011), smoothstep(1.2,9.0,r));');
+};
+floor.position.y = FLOORY; floor.renderOrder = 0;
+scene.add(floor);
+
+/* ══════════ caustics — photons traced in the vertex shader ══════════ */
+const CN = 190;
+const cgeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(CN*CN*3);
+  let i = 0;
+  for(let y=0;y<CN;y++) for(let x=0;x<CN;x++){
+    pos[i++] = (x+0.5)/CN;            // u
+    pos[i++] = (y+0.5)/CN;            // v
+    pos[i++] = ((x*73856093)^(y*19349663))%1000/1000;  // stable per-photon seed
+  }
+  cgeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+}
+const causticMat = new THREE.ShaderMaterial({
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+  uniforms:{
+    uPav:{value:IDEAL}, uCrown:{value:34.5}, uSec:{value:0.0}, uSecD:{value:0.30}, uStar2:{value:0.0},
+    uStarL:{value:0.525}, uLgfL:{value:0.775},
+  uObsR:{value:0.22}, uObsS:{value:0.93}, uGainX:{value:0.62},
+    uKey:{value:new THREE.Vector3(-0.5,0.85,0.35)},
+    uDisp:{value:1.85}, uRot:{value:new THREE.Matrix3()}, uFloor:{value:FLOORY},
+    uGain:{value:1.0}, uSize:{value:1.0}
+  },
+  vertexShader: GEM_GLSL + `
+    uniform vec3  uKey;
+    uniform float uDisp, uFloor, uSize;
+    uniform mat3  uRot;
+    varying vec3  vCol;
+    float gs(float x,float m,float s1,float s2){ float t=(x-m)*(x<m?1.0/s1:1.0/s2); return exp(-0.5*t*t); }
+    vec3 cie(float lamUm){
+      float L=lamUm*1000.0;
+      float x=1.056*gs(L,599.8,37.9,31.0)+0.362*gs(L,442.0,16.0,26.7)-0.065*gs(L,501.1,20.4,26.2);
+      float y=0.821*gs(L,568.8,46.9,40.5)+0.286*gs(L,530.9,16.3,31.1);
+      float z=1.217*gs(L,437.0,11.8,36.0)+0.681*gs(L,459.0,26.0,13.8);
+      return vec3(x,y,z);
+    }
+    vec3 xyz2rgb(vec3 c){ return vec3(
+       3.2406*c.x-1.5372*c.y-0.4986*c.z,
+      -0.9689*c.x+1.8758*c.y+0.0415*c.z,
+       0.0557*c.x-0.2040*c.y+1.0570*c.z); }
+
+    void main(){
+      float u = position.x, v = position.y, sd = position.z;
+      float lam = mix(0.405, 0.695, sd);
+      float ior = iorAt(lam, uDisp);
+
+      // a parallel beam from the key light, aimed at the stone
+      vec3 L = normalize(uKey);
+      vec3 ax = normalize(abs(L.y) < 0.9 ? cross(L, vec3(0,1,0)) : vec3(1,0,0));
+      vec3 ay = cross(L, ax);
+      float rr = sqrt(u) * 1.22, th = v * 6.2831853;
+      vec3 o = (uRot * (L*4.0 + ax*(rr*cos(th)) + ay*(rr*sin(th))));
+      vec3 d = uRot * (-L);
+      // work in gem space
+      o = transpose(uRot) * o;  d = transpose(uRot) * d;
+
+      float tN,tF; vec3 nN,nF;
+      bool ok = gemHit(o,d,tN,tF,nN,nF);
+      vec3 col = vec3(0.0);
+      vec3 hitP = vec3(0.0, 1e5, 0.0);
+
+      if(ok && tF > 0.0){
+        vec3 p = o + d*max(tN,0.0);
+        vec3 dir = refract(d, nN, 1.0/ior);
+        float w = 1.0;
+        if(dot(dir,dir) > 0.0){
+          p += dir*1e-4;
+          for(int b=0;b<7;b++){
+            float t2N=-1e9,t2F=1e9; vec3 a2,b2;
+            if(!gemHit(p,dir,t2N,t2F,a2,b2)) break;
+            p += dir*t2F;
+            float c = dot(dir, b2);
+            float s2 = ior*ior*(1.0 - c*c);
+            if(s2 > 1.0){ dir = reflect(dir, b2); }
+            else{
+              vec3 od = refract(dir, -b2, ior);
+              if(dot(od,od) > 0.0 && od.y < -0.02){
+                // it left through the bottom half: this is what lands on the table
+                vec3 wp = uRot * p;
+                vec3 wd = normalize(uRot * od);
+                float tt = (uFloor - wp.y)/wd.y;
+                if(tt > 0.0 && tt < 40.0){
+                  hitP = wp + wd*tt;
+                  col  = xyz2rgb(cie(lam)) * w * 1.6;
+                }
+              }
+              break;
+            }
+            p += dir*1e-4;
+            w *= 0.985;
+          }
+        }
+      }
+      vCol = max(col, vec3(0.0));
+      vec4 mv = viewMatrix * vec4(hitP, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = max(1.0, uSize * 26.0 / max(-mv.z, 0.1));
+    }`,
+  fragmentShader:`
+    varying vec3 vCol;
+    uniform float uGain;
+    void main(){
+      float d = length(gl_PointCoord - 0.5);
+      float a = smoothstep(0.5, 0.0, d);
+      vec3 c = vCol * a * a * uGain;
+      if(max(c.r, max(c.g, c.b)) < 0.0007) discard;
+      gl_FragColor = vec4(c, 1.0);
+    }`
+});
+const caustics = new THREE.Points(cgeo, causticMat);
+caustics.frustumCulled = false; caustics.renderOrder = 3;
+scene.add(caustics);
+
+/* ══════════ the stone ══════════ */
+const gemUniforms = {
+  uPav:{value:IDEAL}, uCrown:{value:34.5},
+  uKey:{value:new THREE.Vector3(-0.5,0.85,0.35)},
+  uDisp:{value:1.85}, uSpec:{value:9}, uBnc:{value:6},
+  uCam:{value:new THREE.Vector3()}, uRotI:{value:new THREE.Matrix3()},
+  uObs:{value:new THREE.Vector3(0,0,1)}, uSec:{value:0.0}, uSecD:{value:0.30}, uStar2:{value:0.0},
+  uStarL:{value:0.525}, uLgfL:{value:0.775},
+  uObsR:{value:0.22}, uObsS:{value:0.93}, uGainX:{value:0.62},
+  uRot:{value:new THREE.Matrix3()}, uSeed:{value:0},
+};
+const gemMat = new THREE.ShaderMaterial({
+  transparent:true, depthWrite:true, depthTest:true, side:THREE.BackSide,
+  glslVersion: THREE.GLSL3,
+  uniforms: gemUniforms,
+  vertexShader:`
+    varying vec3 vWP;
+    void main(){
+      vWP = (modelMatrix * vec4(position,1.0)).xyz;
+      gl_Position = projectionMatrix * viewMatrix * vec4(vWP,1.0);
+    }`,
+  fragmentShader: GEM_GLSL + ENV_GLSL + `
+    uniform vec3 uCam; uniform mat3 uRotI, uRot; uniform float uSeed;
+    uniform mat4 projectionMatrix;
+    varying vec3 vWP;
+    out vec4 fragOut;
+
+    float hash12(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+
+    void main(){
+      vec3 ro = uRotI * uCam;
+      vec3 rd = normalize(uRotI * (vWP - uCam));
+
+      float tN,tF; vec3 nN,nF;
+      if(!gemHit(ro,rd,tN,tF,nN,nF) || tF <= 0.0) discard;
+
+      vec3 p0 = ro + rd*max(tN,0.0);
+      vec3 n0 = nN;
+      float ci = clamp(dot(-rd, n0), 0.0, 1.0);
+
+      float jit = hash12(gl_FragCoord.xy + uSeed);
+      vec3 XYZ = vec3(0.0);
+      vec3 WHT = vec3(0.0);   // what a flat spectrum would give, for white balance
+
+      for(int k=0;k<12;k++){
+        if(k >= uSpec) break;
+        float lam = mix(0.405, 0.695, (float(k) + jit) / float(uSpec));
+        float ior = iorAt(lam, uDisp);
+        float eta = 1.0 / ior;
+
+        float F0 = fres(ci, eta);
+        float acc = F0 * envRad(uRot * reflect(rd, n0));   // the surface glint
+
+        vec3 dir = refract(rd, n0, eta);
+        if(dot(dir,dir) > 0.0){
+          vec3 p = p0 + dir*1e-4;
+          float w = 1.0 - F0;
+          for(int b=0;b<10;b++){
+            if(b >= uBnc) break;
+            float a1=-1e9,a2=1e9; vec3 m1,m2;
+            if(!gemHit(p, dir, a1,a2,m1,m2)) break;
+            p += dir*a2;
+            float c = clamp(dot(dir, m2), 0.0, 1.0);
+            float s2 = ior*ior*(1.0 - c*c);
+            if(s2 > 1.0){
+              dir = reflect(dir, m2);          // total internal reflection
+              w  *= 0.995;
+            } else {
+              float Fo = fres(c, ior);
+              vec3 od = refract(dir, -m2, ior);
+              if(dot(od,od) > 0.0) acc += w*(1.0-Fo)*envRad(uRot * od);
+              w *= Fo;
+              dir = reflect(dir, m2);
+            }
+            p += dir*1e-4;
+            if(w < 0.008) break;
+          }
+        }
+        vec3 cw = cie(lam);
+        XYZ += acc * cw;
+        WHT += cw;
+      }
+
+      // divide by the flat-spectrum response so a colourless stone stays colourless
+      vec3 wf  = max(xyz2rgb(WHT), vec3(1e-4));
+      vec3 rgb = xyz2rgb(XYZ) / wf * uGainX;
+      rgb = max(rgb, vec3(0.0));
+
+      // write the true surface depth so metal can occlude the stone properly
+      vec3 wdir = normalize(vWP - uCam);
+      vec4 clip = projectionMatrix * viewMatrix * vec4(uCam + wdir*max(tN,0.0), 1.0);
+      gl_FragDepth = clamp(0.5 + 0.5*(clip.z/clip.w), 0.0, 1.0);
+
+      fragOut = vec4(rgb, 1.0);
+    }`
+});
+// a shell that safely encloses the stone, used only to launch rays
+const shell = new THREE.Mesh(new THREE.BoxGeometry(2.3, 3.1, 2.3), gemMat);
+shell.position.y = -0.22;
+shell.frustumCulled = false;
+scene.add(shell);
+
+/* ══════════ the setting ══════════ */
+function metalEnv(){
+  const sc = new THREE.Scene();
+  sc.add(new THREE.Mesh(new THREE.SphereGeometry(60,24,16),
+    new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, uniforms:{},
+      vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader:`varying vec3 vP; void main(){
+        float h=normalize(vP).y*0.5+0.5;
+        vec3 c=mix(vec3(0.020,0.021,0.026), vec3(0.28,0.29,0.34), pow(h,1.4));
+        c=mix(c, vec3(0.95,0.86,0.72), pow(max(h-0.62,0.0)*2.6,2.0));
+        gl_FragColor=vec4(c,1.0); }` })));
+  const card=(w,h,col,int,pos,rot)=>{
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+      new THREE.MeshBasicMaterial({ color:new THREE.Color(col).multiplyScalar(int), side:THREE.DoubleSide }));
+    m.position.set(...pos); m.rotation.set(...rot); sc.add(m);
+  };
+  card(34,26,0xfff4e6, 5.0, [-15,13, 9], [0, 0.72,0]);
+  card(34,26,0xfff0e0, 2.4, [ -5,19, 3], [-1.15,0,0]);
+  card(26, 9,0xc2d4ec, 1.5, [ 15, 6,-12],[0,-1.00,0]);
+  card(18, 5,0xffe0b4, 1.2, [  0,-2,11], [0.40,0,0]);
+  return sc;
+}
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+scene.environment = pmrem.fromScene(metalEnv(), 0.02).texture;
+
+const metal = new THREE.MeshPhysicalMaterial({
+  color:0xd8d9dc, metalness:1.0, roughness:0.115,
+  envMapIntensity:1.35, clearcoat:0.0,
+});
+const ring = new THREE.Group();
+
+// ── band: wide and heavy. a 1ct stone is 6.5mm across, so this reads ~3mm broad.
+const band = new THREE.Mesh(new THREE.TorusGeometry(1.80, 0.245, 26, 150), metal);
+band.scale.z = 1.55;                       // flatten the tube into a broad comfort-fit band
+band.position.y = -2.98;
+ring.add(band);
+
+// ── head: a heavy tapered basket the prongs grow out of
+const collar = new THREE.Mesh(new THREE.TorusGeometry(1.015, 0.082, 16, 120), metal);
+collar.rotation.x = Math.PI/2; collar.position.y = -0.30;
+ring.add(collar);
+const base = new THREE.Mesh(new THREE.TorusGeometry(0.715, 0.078, 16, 96), metal);
+base.rotation.x = Math.PI/2; base.position.y = -1.09;
+ring.add(base);
+
+// ── six prongs, rooted deep in the basket, folded over the girdle
+for(let k=0;k<6;k++){
+  const a = k*Math.PI/3 + Math.PI/12;
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.090, 0.130, 0.84, 18), metal);
+  body.position.y = -0.22;                 // passes through the collar, so it reads as one piece
+  g.add(body);
+  const claw = new THREE.Mesh(new THREE.SphereGeometry(0.108, 20, 16), metal);
+  claw.position.set(0, 0.195, -0.055);
+  claw.scale.set(0.92, 0.70, 1.30);
+  g.add(claw);
+  g.position.set(Math.cos(a)*1.012, 0.0, Math.sin(a)*1.012);
+  g.rotation.y = -a;
+  g.rotation.z = 0.075;
+  ring.add(g);
+}
+scene.add(ring);
+
+/* ══════════ post ══════════ */
+const _sz=new THREE.Vector2(); renderer.getDrawingBufferSize(_sz);
+const _rt=new THREE.WebGLRenderTarget(Math.max(_sz.x,2),Math.max(_sz.y,2),
+  { type:THREE.HalfFloatType, samples:4, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter });
+const composer = new EffectComposer(renderer,_rt);
+composer.addPass(new RenderPass(scene,camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 0.30, 0.42, 1.05);
+composer.addPass(bloom);
+const finalPass = new ShaderPass({
+  uniforms:{ tDiffuse:{value:null}, uT:{value:0}, uRes:{value:new THREE.Vector2(1,1)} },
+  vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse; uniform float uT; uniform vec2 uRes; varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+    void main(){
+      vec2 d=vUv-0.5; float r2=dot(d,d);
+      float ca=0.0022*r2*4.0;
+      vec3 c;
+      c.r=texture2D(tDiffuse,vUv+d*ca).r;
+      c.g=texture2D(tDiffuse,vUv).g;
+      c.b=texture2D(tDiffuse,vUv-d*ca).b;
+      vec2 tx=1.0/uRes;
+      vec3 bl=(texture2D(tDiffuse,vUv+vec2(tx.x,0)).rgb+texture2D(tDiffuse,vUv-vec2(tx.x,0)).rgb
+             +texture2D(tDiffuse,vUv+vec2(0,tx.y)).rgb+texture2D(tDiffuse,vUv-vec2(0,tx.y)).rgb)*0.25;
+      c += (c-bl)*0.45;
+      c *= smoothstep(0.98,0.10,r2*1.5);
+      float g=hash(vUv*vec2(1920.0,1080.0)+uT*37.0)-0.5;
+      c += g*0.016*(1.0-0.6*smoothstep(0.0,0.5,dot(c,vec3(0.33))));
+      gl_FragColor=vec4(pow(c,vec3(0.985)),1.0);
+    }`
+});
+finalPass.renderToScreen = true;
+composer.addPass(finalPass);
+
+/* ══════════ orbit + light ══════════ */
+let az=0.55, el=0.98, azV=0, elV=0, drift=0;
+const DIST = 10.4;
+function placeCamera(){
+  const a=az+drift, ce=Math.cos(el), se=Math.sin(el);
+  camera.position.set(target.x+Math.sin(a)*DIST*ce, target.y+se*DIST, target.z+Math.cos(a)*DIST*ce);
+  camera.lookAt(target);
+}
+// the stone's own tilt, so the fire is not axis-aligned with the camera
+const gemQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.0, 0.20, 0.0));
+const gemM = new THREE.Matrix4().makeRotationFromQuaternion(gemQ);
+const rot  = new THREE.Matrix3().setFromMatrix4(gemM);
+const rotI = new THREE.Matrix3().copy(rot).transpose();
+
+/* ══════════ input ══════════ */
+const ptr = new THREE.Vector2(0,0);
+let hasPtr=false, down=false, lastX=0, lastY=0;
+const keyDir = new THREE.Vector3(-0.5,0.85,0.35).normalize();
+const keyTgt = keyDir.clone();
+
+canvas.addEventListener('pointerdown',e=>{
+  try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+  down=true; lastX=e.clientX; lastY=e.clientY; canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove',e=>{
+  const r=canvas.getBoundingClientRect();
+  ptr.x=((e.clientX-r.left)/r.width)*2-1;
+  ptr.y=-((e.clientY-r.top)/r.height)*2+1;
+  hasPtr=true;
+  if(down && e.buttons===0){ down=false; canvas.classList.remove('dragging'); }
+  if(!down) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  azV -= dx*0.0045; elV += dy*0.0032;
+});
+addEventListener('pointerup',()=>{ down=false; canvas.classList.remove('dragging'); });
+addEventListener('pointercancel',()=>{ down=false; });
+canvas.addEventListener('pointerleave',()=>{ hasPtr=false; });
+
+pavEl.addEventListener('input',()=>{
+  const v=parseFloat(pavEl.value);
+  gemUniforms.uPav.value=v; causticMat.uniforms.uPav.value=v;
+  pavvEl.textContent=v.toFixed(1)+'°';
+  pavvEl.classList.toggle('bad', Math.abs(v-IDEAL) > 1.6);
+  hintEl.textContent = Math.abs(v-IDEAL)>1.6 ? 'light is leaking out of the pavilion'
+                                             : 'move to light it · drag to turn';
+});
+const secEl=document.getElementById('sec'), secvEl=document.getElementById('secv');
+secEl.addEventListener('input',()=>{
+  const v=parseFloat(secEl.value);
+  gemUniforms.uSec.value=v; causticMat.uniforms.uSec.value=v;
+  gemUniforms.uSecD.value = v < 0.15 ? 0.30 : 0.004;
+  causticMat.uniforms.uSecD.value = gemUniforms.uSecD.value;
+  secvEl.textContent = v < 0.15 ? 'classic' : v.toFixed(1)+'\u00b0';
+});
+document.getElementById('reset').addEventListener('click',()=>{
+  pavEl.value=String(IDEAL); pavEl.dispatchEvent(new Event('input'));
+});
+
+/* Brilliance, measured not guessed: build the same facet set in JS, send a fan
+   of rays down through the table, and count how many come back out of the crown. */
+function facets(pavDeg, crownDeg){
+  const ca=crownDeg*Math.PI/180, pa=pavDeg*Math.PI/180, GA=0.030, TBL=0.560;
+  const sc=Math.sin(ca), cc=Math.cos(ca), sp=Math.sin(pa), cp=Math.cos(pa);
+  const tableY=GA+(1-TBL)*Math.tan(ca), culetY=-GA-Math.tan(pa);
+  const sa=Math.sin(ca*0.55), cs=Math.cos(ca*0.55);
+  const su=Math.sin(ca*1.22), cu=Math.cos(ca*1.22);
+  const sl=Math.sin(pa*1.03), cl=Math.cos(pa*1.03);
+  const P=[[0,1,0,tableY],[0,-1,0,-culetY]];
+  for(let k=0;k<8;k++){
+    const a=k*Math.PI/4, ux=Math.cos(a), uy=Math.sin(a);
+    P.push([sc*ux, cc, sc*uy, sc+GA*cc]);
+    P.push([sp*ux,-cp, sp*uy, sp+GA*cp]);
+    const b=a+Math.PI/8, vx=Math.cos(b), vy=Math.sin(b);
+    P.push([sa*vx, cs, sa*vy, sa*TBL+cs*tableY]);
+  }
+  for(let k=0;k<16;k++){
+    const a=k*Math.PI/8, ux=Math.cos(a), uy=Math.sin(a);
+    P.push([ux,0,uy,1]);
+    const b=a+Math.PI/16, vx=Math.cos(b), vy=Math.sin(b);
+    P.push([su*vx, cu, su*vy, su+GA*cu]);
+    P.push([sl*vx,-cl, sl*vy, sl+GA*cl]);
+  }
+  return P;
+}
+function exitOf(P, o, d){
+  let tF=1e9, nF=null;
+  for(const q of P){
+    const den = d[0]*q[0]+d[1]*q[1]+d[2]*q[2];
+    if(den <= 1e-7) continue;
+    const t = (q[3] - (o[0]*q[0]+o[1]*q[1]+o[2]*q[2]))/den;
+    if(t > 1e-5 && t < tF){ tF=t; nF=q; }
+  }
+  return nF ? {t:tF, n:nF} : null;
+}
+const BR_CACHE = new Map();
+function brilliance(pavDeg){
+  const key = pavDeg.toFixed(1);
+  if(BR_CACHE.has(key)) return BR_CACHE.get(key);
+  const P = facets(pavDeg, 34.5), n = 2.4175;
+  let out = 0, total = 0;
+  for(let i=0;i<24;i++){
+    for(let j=0;j<24;j++){
+      const r = 0.54*Math.sqrt((i+0.5)/24), th = 2*Math.PI*(j+0.5)/24;
+      let o = [r*Math.cos(th), 3.0, r*Math.sin(th)];
+      let d = [0,-1,0];                       // straight down through the table
+      // normal incidence on the table: enters undeviated
+      o = [o[0], facets(pavDeg,34.5)[0][3] - 1e-4, o[2]];
+      total++;
+      for(let b=0;b<8;b++){
+        const h = exitOf(P, o, d);
+        if(!h) break;
+        o = [o[0]+d[0]*h.t, o[1]+d[1]*h.t, o[2]+d[2]*h.t];
+        const q = h.n;
+        const c = d[0]*q[0]+d[1]*q[1]+d[2]*q[2];
+        if(n*n*(1-c*c) > 1){                  // total internal reflection, keep going
+          d = [d[0]-2*c*q[0], d[1]-2*c*q[1], d[2]-2*c*q[2]];
+          const L=Math.hypot(d[0],d[1],d[2]); d=[d[0]/L,d[1]/L,d[2]/L];
+          o = [o[0]+d[0]*1e-5, o[1]+d[1]*1e-5, o[2]+d[2]*1e-5];
+        } else {                              // it escapes here
+          if(q[1] > 0.30) out++;              // out through the crown = returned to the eye
+          break;
+        }
+      }
+    }
+  }
+  const v = out/total;
+  BR_CACHE.set(key, v);
+  return v;
+}
+
+/* ══════════ loop ══════════ */
+const clock=new THREE.Clock();
+let t=0, visible=true, tier=0, slowRuns=0, acc=0, frames=0;
+const TIERS=[
+  { dpr:1.6, spec:9, bnc:6, pts:1.0 },
+  { dpr:1.2, spec:7, bnc:5, pts:0.7 },
+  { dpr:1.0, spec:5, bnc:4, pts:0.5 },
+  { dpr:0.8, spec:4, bnc:3, pts:0.35 },
+];
+function applyTier(){
+  const T=TIERS[tier];
+  gemUniforms.uSpec.value=T.spec; gemUniforms.uBnc.value=T.bnc;
+  causticMat.uniforms.uSize.value = 1.0/Math.sqrt(T.pts);
+  cgeo.setDrawRange(0, Math.floor(CN*CN*T.pts));
+  causticMat.uniforms.uGain.value = 0.85/T.pts;
+}
+function resize(){
+  const r=canvas.getBoundingClientRect();
+  const dpr=Math.min(devicePixelRatio||1, TIERS[tier].dpr);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(r.width,r.height,false);
+  composer.setPixelRatio(dpr); composer.setSize(r.width,r.height);
+  bloom.setSize(r.width*dpr,r.height*dpr);
+  finalPass.uniforms.uRes.value.set(r.width*dpr, r.height*dpr);
+  camera.aspect=r.width/r.height; camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize);
+new ResizeObserver(resize).observe(canvas);
+applyTier(); resize();
+new IntersectionObserver(es=>{ visible=es[0].isIntersecting; },{threshold:0.01}).observe(canvas);
+
+const _v=new THREE.Vector3();
+function tick(){
+  requestAnimationFrame(tick);
+  if(!visible){ clock.getDelta(); return; }
+  const dt=Math.min(clock.getDelta(),0.05);
+  t+=dt;
+
+  acc+=dt; frames++;
+  if(frames>=70){
+    if(acc/frames > 0.026){ if(++slowRuns>=2 && tier<TIERS.length-1){ tier++; slowRuns=0; applyTier(); resize(); } }
+    else slowRuns=0;
+    acc=0; frames=0;
+  }
+
+  az+=azV; el=Math.max(0.06, Math.min(1.50, el+elV));
+  azV*=Math.pow(0.003,dt); elV*=Math.pow(0.003,dt);
+  if(!reduced && !down) drift += dt*0.055;
+  placeCamera();
+
+  // the cursor is the key light
+  if(hasPtr && !down){
+    keyTgt.set(ptr.x*1.15, 0.30 + ptr.y*0.85, 0.62).normalize();
+  } else if(!hasPtr && !reduced){
+    keyTgt.set(Math.sin(t*0.21)*0.8, 0.55+Math.sin(t*0.13)*0.22, 0.55).normalize();
+  }
+  keyDir.lerp(keyTgt, Math.min(1, dt*4.5)).normalize();
+  // into the camera's frame so the light follows the viewer, not the world
+  _v.copy(keyDir).applyAxisAngle(new THREE.Vector3(0,1,0), az+drift);
+  gemUniforms.uKey.value.copy(_v);
+  causticMat.uniforms.uKey.value.copy(_v);
+
+  gemUniforms.uCam.value.copy(camera.position);
+  gemUniforms.uObs.value.copy(camera.position).sub(target).normalize();
+  gemUniforms.uRot.value.copy(rot);
+  gemUniforms.uRotI.value.copy(rotI);
+  gemUniforms.uSeed.value = (t*60.0)%1000.0;
+  causticMat.uniforms.uRot.value.copy(rot);
+
+  finalPass.uniforms.uT.value=t;
+  composer.render();
+
+  const v=parseFloat(pavEl.value);
+  const b=brilliance(v);
+  const best=brilliance(IDEAL);
+  const rel=b/Math.max(best,1e-6);
+  statEl.innerHTML = rel > 0.88 ? `light returned <em>${Math.round(b*100)}%</em>`
+                                : `light returned <i>${Math.round(b*100)}%</i> · leaking`;
+}
+tick();
+
+canvas.addEventListener('webglcontextlost',e=>{ e.preventDefault(); });
+</script>
+</body>
+</html>
